@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Test
+        run: go test ./... -count=1
+
+  e2e-storage:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+      memcache:
+        image: memcached:1.6-alpine
+        ports:
+          - 11211:11211
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: E2E
+        env:
+          CLOCKWORK_REDIS_ENDPOINT: 127.0.0.1:6379
+          CLOCKWORK_MEMCACHE_ENDPOINT: 127.0.0.1:11211
+        run: go test ./e2e -count=1 -v

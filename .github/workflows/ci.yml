@@ -14,7 +14,12 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Test
-        run: go test ./... -count=1
+        run: go test ./... -count=1 -coverprofile=coverage.out -covermode=atomic
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage.out
+          fail_ci_if_error: false
 
   e2e-storage:
     runs-on: ubuntu-latest

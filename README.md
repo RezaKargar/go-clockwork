@@ -1,16 +1,18 @@
 # go-clockwork
 
-`go-clockwork` is a Go package for collecting request metadata compatible with the Clockwork browser extension workflow.
+[![codecov](https://codecov.io/gh/RezaKargar/go-clockwork/graph/badge.svg)](https://codecov.io/gh/RezaKargar/go-clockwork)
+
+**go-clockwork** is a Go port of [Clockwork](https://github.com/itsgoingd/clockwork) — the PHP debugging toolbar and request inspector that works with the [Clockwork browser extension](https://chrome.google.com/webstore/detail/clockwork/dmggabnehkmmfmdffgajcflpdjlnoemp). It collects request metadata from your Go services and exposes it via the same protocol, so you can inspect requests, logs, and performance in the browser or in Chrome DevTools.
 
 ## Features
 
-- Request-scoped collectors with bounded payload limits
-- Storage backends: memory, Redis, Memcache
-- Clean architecture layers: core domain, adapter packages, and integration packages
-- Gin and net/http middleware adapters
-- Minimal metadata API: `GET /__clockwork/:id`
-- Zap, SQL, and cache integration adapters
-- Config loading from `yml` and `.env`
+- **Request-scoped collection** — Bounded payload limits and truncation to avoid unbounded memory use
+- **Storage backends** — In-memory, Redis, and Memcache for request metadata
+- **Framework adapters** — Gin and `net/http` middleware; activates only when the `X-Clockwork` header is present
+- **Metadata API** — `GET /__clockwork/:id` to retrieve captured data (compatible with the Clockwork extension)
+- **Integrations** — Zap (logging), SQL query observation, and cache wrapper for timeline events
+- **Config** — YAML and `.env` loading with `CLOCKWORK_*` env overrides
+- **Clean layout** — Core domain, adapter packages, and integration packages kept separate
 
 ## Install
 
@@ -49,7 +51,7 @@ ginmw.RegisterRoutes(router, cw, logger)
 
 ## HTTP API
 
-- `GET /__clockwork/:id`
+- `GET /__clockwork/:id` — Returns captured metadata for the given request ID (used by the Clockwork extension).
 
 ## License
 

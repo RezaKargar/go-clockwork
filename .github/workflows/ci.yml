@@ -13,6 +13,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - name: Tidy
+        run: go mod tidy
       - name: Test
         run: go test ./... -count=1 -coverprofile=coverage.out -covermode=atomic
       - name: Upload coverage to Codecov
@@ -37,6 +39,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - name: Tidy
+        run: go mod tidy
       - name: E2E
         env:
           CLOCKWORK_REDIS_ENDPOINT: 127.0.0.1:6379

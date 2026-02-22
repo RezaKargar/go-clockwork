@@ -8,9 +8,9 @@
 
 - **Request-scoped collection** — Bounded payload limits and truncation
 - **Pluggable storage** — In-memory (default), with optional Redis and Memcache in separate modules
-- **Pluggable framework adapters** — net/http (in core), Gin, Chi, Fiber, Echo in separate modules
+- **Pluggable framework adapters** — net/http and Gin in core; Chi, Fiber, Echo in separate modules
 - **Metadata API** — `GET /__clockwork/:id` (Clockwork extension compatible)
-- **Integrations** — Cache, SQL, and Zap in separate modules; implement `DataSource` for custom data
+- **Integrations** — Cache, SQL, and Zap in core; implement `DataSource` for custom data
 - **Interfaces** — Implement `Storage`, `DataCollector`, `DataSource`, or add your own middleware
 
 ## Install
@@ -28,24 +28,15 @@ go get github.com/RezaKargar/go-clockwork/storage/redis
 go get github.com/RezaKargar/go-clockwork/storage/memcache
 ```
 
-**Optional framework middleware:**
+**Optional framework middleware** (Chi, Fiber, Echo — Gin is in core):
 
 ```bash
-go get github.com/RezaKargar/go-clockwork/middleware/gin
 go get github.com/RezaKargar/go-clockwork/middleware/chi
 go get github.com/RezaKargar/go-clockwork/middleware/fiber
 go get github.com/RezaKargar/go-clockwork/middleware/echo
 ```
 
-**Optional integrations:**
-
-```bash
-go get github.com/RezaKargar/go-clockwork/integrations/cache
-go get github.com/RezaKargar/go-clockwork/integrations/sql
-go get github.com/RezaKargar/go-clockwork/integrations/zap
-```
-
-Config loading (YAML + .env) is in the core module: `github.com/RezaKargar/go-clockwork/config`.
+Config, cache/sql/zap integrations, and Gin middleware are in the core module; one `go get github.com/RezaKargar/go-clockwork` is enough for typical use.
 
 ## Quick Start (Gin)
 
@@ -134,11 +125,12 @@ Framework adapters use the same flow: call `clockwork.NewRequestCapture(cw, meth
 | `.../middleware/chi` | Chi middleware and routes |
 | `.../middleware/fiber` | Fiber middleware and routes |
 | `.../middleware/echo` | Echo middleware and routes |
-| `.../middleware/http` | net/http middleware (part of core module) |
-| `.../integrations/cache` | Cache wrapper (separate module) |
-| `.../integrations/sql` | SQL observer (separate module) |
-| `.../integrations/zap` | Zap log integration |
-| `.../config` | YAML + env config loader (part of core module) |
+| `.../middleware/http` | net/http middleware (core) |
+| `.../middleware/gin` | Gin middleware (core) |
+| `.../integrations/cache` | Cache wrapper (core) |
+| `.../integrations/sql` | SQL observer (core) |
+| `.../integrations/zap` | Zap log integration (core) |
+| `.../config` | YAML + env config loader (core) |
 
 See [docs/architecture.md](docs/architecture.md) and [docs/migration.md](docs/migration.md) for details.
 

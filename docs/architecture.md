@@ -11,10 +11,12 @@ Package: `github.com/RezaKargar/go-clockwork`
 - `Storage` interface and in-memory implementation only
 - `DataSource` interface for pluggable data (e.g. custom metrics) via `RegisterDataSource`
 - Helper functions for middleware (`ShouldSkipPath`, `ShouldCapture`, `BuildRequestURL`, `ExtractSafeHeaders`, `TraceFromContext`, `NewRequestCapture`)
-- net/http middleware (`middleware/http` package, part of core module)
+- net/http middleware (`middleware/http` package)
+- Gin middleware (`middleware/gin` package)
 - Config loader (`config` package): YAML and `.env` with `CLOCKWORK_*` overrides (Viper + gotenv)
+- Integrations: cache, SQL, Zap (`integrations/cache`, `integrations/sql`, `integrations/zap`)
 
-Core does not import Gin, Chi, Fiber, Echo, Redis, Memcache, or Zap. Integrations (cache, SQL, zap) are separate modules.
+Core does not import Chi, Fiber, Echo, Redis, or Memcache. Storage (Redis, Memcache) and middleware (Chi, Fiber, Echo) remain separate modules.
 
 ## Storage modules
 
@@ -25,21 +27,21 @@ Implement the `Storage` interface to add a custom backend.
 
 ## Adapter layer (middleware)
 
-- `github.com/RezaKargar/go-clockwork/middleware/http` — net/http (in core)
-- `github.com/RezaKargar/go-clockwork/middleware/gin`
-- `github.com/RezaKargar/go-clockwork/middleware/chi`
-- `github.com/RezaKargar/go-clockwork/middleware/fiber`
-- `github.com/RezaKargar/go-clockwork/middleware/echo`
+- `github.com/RezaKargar/go-clockwork/middleware/http` — net/http (core)
+- `github.com/RezaKargar/go-clockwork/middleware/gin` — Gin (core)
+- `github.com/RezaKargar/go-clockwork/middleware/chi` — Chi (separate module)
+- `github.com/RezaKargar/go-clockwork/middleware/fiber` — Fiber (separate module)
+- `github.com/RezaKargar/go-clockwork/middleware/echo` — Echo (separate module)
 
 Each adapter uses the core helpers and implements framework-specific middleware and route registration.
 
 **Middleware contract:** To add support for another framework, (1) call `clockwork.NewRequestCapture(cw, method, path, uri, headers)`; if it returns `(nil, false)`, skip profiling and run the next handler; (2) otherwise set headers, URL, and trace on the collector, put it in request context via `ContextWithCollector`, set response headers `X-Clockwork-Id` and `X-Clockwork-Version`, run the handler, then call `cw.CompleteRequest(ctx, collector, status, duration)`.
 
-## Integration layer
+## Integration layer (core)
 
-- `github.com/RezaKargar/go-clockwork/integrations/cache` — Cache wrapper (separate module)
-- `github.com/RezaKargar/go-clockwork/integrations/sql` — SQL observer (separate module)
-- `github.com/RezaKargar/go-clockwork/integrations/zap` — Zap core wrapper (separate module)
+- `github.com/RezaKargar/go-clockwork/integrations/cache` — Cache wrapper
+- `github.com/RezaKargar/go-clockwork/integrations/sql` — SQL observer
+- `github.com/RezaKargar/go-clockwork/integrations/zap` — Zap core wrapper
 
 ## Config (core)
 

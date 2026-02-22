@@ -1,4 +1,4 @@
-package clockwork
+package memcache
 
 import (
 	"context"
@@ -8,11 +8,20 @@ import (
 	"sync"
 	"time"
 
+	"github.com/RezaKargar/go-clockwork"
 	"github.com/bradfitz/gomemcache/memcache"
 )
 
-// MemcacheStorage stores Clockwork payloads in Memcached.
-type MemcacheStorage struct {
+// Config holds Memcache storage configuration.
+type Config struct {
+	Endpoints   []string
+	Prefix      string
+	TTL         time.Duration
+	MaxEntries int
+}
+
+// Storage implements clockwork.Storage using Memcached.
+type Storage struct {
 	client     *memcache.Client
 	prefix     string
 	indexKey   string
@@ -21,44 +30,40 @@ type MemcacheStorage struct {
 	mu         sync.Mutex
 }
 
-// NewMemcacheStorage creates Memcached-backed storage.
-func NewMemcacheStorage(cfg Config) (Storage, error) {
-	if len(cfg.MemcacheEndpoints) == 0 {
-		return nil, fmt.Errorf("memcache_endpoints is required for memcache storage")
-	}
-
-	endpoints := make([]string, 0, len(cfg.MemcacheEndpoints))
-	for _, endpoint := range cfg.MemcacheEndpoints {
+// New creates Memcached-backed storage for Clockwork.
+func New(cfg Config) (clockwork.Storage, error) {
+	endpoints := make([]string, 0, len(cfg.Endpoints))
+	for _, endpoint := range cfg.Endpoints {
 		trimmed := strings.TrimSpace(endpoint)
 		if trimmed != "" {
 			endpoints = append(endpoints, trimmed)
 		}
 	}
 	if len(endpoints) == 0 {
-		return nil, fmt.Errorf("memcache_endpoints is required for memcache storage")
+		return nil, fmt.Errorf("memcache endpoints are required")
 	}
 
-	ttl := int32(cfg.RequestRetentionTime.Seconds())
+	ttl := int32(cfg.TTL.Seconds())
 	if ttl <= 0 {
 		ttl = int32((time.Hour).Seconds())
 	}
 
-	prefix := cfg.MemcachePrefix
+	prefix := strings.TrimSpace(cfg.Prefix)
 	if prefix == "" {
 		prefix = "clockwork"
 	}
 
-	return &MemcacheStorage{
+	return &Storage{
 		client:     memcache.New(endpoints...),
 		prefix:     prefix,
 		indexKey:   prefix + ":index",
-		maxEntries: cfg.MaxRequests,
+		maxEntries: cfg.MaxEntries,
 		ttlSeconds: ttl,
 	}, nil
 }
 
 // Store saves metadata and updates recency index.
-func (s *MemcacheStorage) Store(ctx context.Context, metadata *Metadata) error {
+func (s *Storage) Store(ctx context.Context, metadata *clockwork.Metadata) error {
 	if metadata == nil {
 		return fmt.Errorf("metadata cannot be nil")
 	}
@@ -107,7 +112,7 @@ func (s *MemcacheStorage) Store(ctx context.Context, metadata *Metadata) error {
 }
 
 // Get fetches metadata by id.
-func (s *MemcacheStorage) Get(ctx context.Context, id string) (*Metadata, error) {
+func (s *Storage) Get(ctx context.Context, id string) (*clockwork.Metadata, error) {
 	item, err := s.client.Get(s.reqKey(id))
 	if err != nil {
 		if err == memcache.ErrCacheMiss {
@@ -116,7 +121,7 @@ func (s *MemcacheStorage) Get(ctx context.Context, id string) (*Metadata, error)
 		return nil, fmt.Errorf("memcache get metadata: %w", err)
 	}
 
-	var metadata Metadata
+	var metadata clockwork.Metadata
 	if err := json.Unmarshal(item.Value, &metadata); err != nil {
 		return nil, fmt.Errorf("unmarshal metadata: %w", err)
 	}
@@ -125,7 +130,7 @@ func (s *MemcacheStorage) Get(ctx context.Context, id string) (*Metadata, error)
 }
 
 // List returns most recent metadata first.
-func (s *MemcacheStorage) List(ctx context.Context, limit int) ([]*Metadata, error) {
+func (s *Storage) List(ctx context.Context, limit int) ([]*clockwork.Metadata, error) {
 	s.mu.Lock()
 	ids, err := s.loadIndexLocked()
 	s.mu.Unlock()
@@ -137,13 +142,13 @@ func (s *MemcacheStorage) List(ctx context.Context, limit int) ([]*Metadata, err
 		limit = len(ids)
 	}
 
-	out := make([]*Metadata, 0, limit)
+	out := make([]*clockwork.Metadata, 0, limit)
 	for i := 0; i < limit; i++ {
 		item, err := s.client.Get(s.reqKey(ids[i]))
 		if err != nil {
 			continue
 		}
-		var metadata Metadata
+		var metadata clockwork.Metadata
 		if err := json.Unmarshal(item.Value, &metadata); err != nil {
 			continue
 		}
@@ -154,15 +159,15 @@ func (s *MemcacheStorage) List(ctx context.Context, limit int) ([]*Metadata, err
 }
 
 // Cleanup is a no-op for Memcached since TTL handles expiry.
-func (s *MemcacheStorage) Cleanup(ctx context.Context, maxAge time.Duration) error {
+func (s *Storage) Cleanup(ctx context.Context, maxAge time.Duration) error {
 	return nil
 }
 
-func (s *MemcacheStorage) reqKey(id string) string {
+func (s *Storage) reqKey(id string) string {
 	return s.prefix + ":req:" + id
 }
 
-func (s *MemcacheStorage) loadIndexLocked() ([]string, error) {
+func (s *Storage) loadIndexLocked() ([]string, error) {
 	item, err := s.client.Get(s.indexKey)
 	if err != nil {
 		if err == memcache.ErrCacheMiss {
@@ -178,7 +183,7 @@ func (s *MemcacheStorage) loadIndexLocked() ([]string, error) {
 	return ids, nil
 }
 
-func (s *MemcacheStorage) saveIndexLocked(ids []string) error {
+func (s *Storage) saveIndexLocked(ids []string) error {
 	payload, err := json.Marshal(ids)
 	if err != nil {
 		return fmt.Errorf("marshal index: %w", err)

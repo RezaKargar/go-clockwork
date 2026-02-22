@@ -5,8 +5,11 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/RezaKargar/go-clockwork"
+	"github.com/RezaKargar/go-clockwork/storage/memcache"
+	"github.com/RezaKargar/go-clockwork/storage/redis"
 	ginmw "github.com/RezaKargar/go-clockwork/middleware/gin"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -16,11 +19,9 @@ func TestE2E_InMemory_GinFlow(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	cfg := clockwork.DefaultConfig()
-	cfg.StorageType = "memory"
 	cfg.Normalize()
 
-	store, err := clockwork.NewStorage(cfg)
-	require.NoError(t, err)
+	store := clockwork.NewInMemoryStorage(cfg.MaxRequests, cfg.MaxStorageBytes)
 	cw := clockwork.NewClockwork(cfg, store)
 
 	router := gin.New()
@@ -48,13 +49,13 @@ func TestE2E_Redis_GinFlow(t *testing.T) {
 	if endpoint == "" {
 		t.Skip("CLOCKWORK_REDIS_ENDPOINT is not set")
 	}
-	runStorageFlow(t, clockwork.Config{
-		Enabled:       true,
-		HeaderName:    "X-Clockwork",
-		IDHeader:      "X-Clockwork-Id",
-		StorageType:   "redis",
-		RedisEndpoint: endpoint,
+	store, err := redis.New(redis.Config{
+		Endpoint:   endpoint,
+		TTL:        time.Hour,
+		MaxEntries: 200,
 	})
+	require.NoError(t, err)
+	runStorageFlowWithStore(t, store)
 }
 
 func TestE2E_Memcache_GinFlow(t *testing.T) {
@@ -62,22 +63,21 @@ func TestE2E_Memcache_GinFlow(t *testing.T) {
 	if endpoint == "" {
 		t.Skip("CLOCKWORK_MEMCACHE_ENDPOINT is not set")
 	}
-	runStorageFlow(t, clockwork.Config{
-		Enabled:           true,
-		HeaderName:        "X-Clockwork",
-		IDHeader:          "X-Clockwork-Id",
-		StorageType:       "memcache",
-		MemcacheEndpoints: []string{endpoint},
+	store, err := memcache.New(memcache.Config{
+		Endpoints:  []string{endpoint},
+		TTL:       time.Hour,
+		MaxEntries: 200,
 	})
+	require.NoError(t, err)
+	runStorageFlowWithStore(t, store)
 }
 
-func runStorageFlow(t *testing.T, cfg clockwork.Config) {
+func runStorageFlowWithStore(t *testing.T, store clockwork.Storage) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
-	cfg.Normalize()
 
-	store, err := clockwork.NewStorage(cfg)
-	require.NoError(t, err)
+	cfg := clockwork.DefaultConfig()
+	cfg.Normalize()
 	cw := clockwork.NewClockwork(cfg, store)
 
 	router := gin.New()

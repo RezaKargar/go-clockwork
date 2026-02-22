@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/RezaKargar/go-clockwork"
-	"go.opentelemetry.io/otel/trace"
 )
 
 // Middleware returns a net/http middleware for Clockwork request profiling.
@@ -25,7 +24,7 @@ func Middleware(cw *clockwork.Clockwork, next http.Handler) http.Handler {
 			return
 		}
 
-		if shouldSkipPath(r.URL.Path) || !headerExists(r.Header, cw.Config().HeaderName) {
+		if clockwork.ShouldSkipPath(r.URL.Path) || !clockwork.ShouldCapture(r.Header, cw.Config().HeaderName) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -36,10 +35,10 @@ func Middleware(cw *clockwork.Clockwork, next http.Handler) http.Handler {
 			return
 		}
 
-		collector.SetHeaders(extractSafeHeaders(r.Header))
-		collector.SetURL(buildRequestURL(r))
+		collector.SetHeaders(clockwork.ExtractSafeHeaders(r.Header))
+		collector.SetURL(clockwork.BuildRequestURL(r))
 
-		traceID, spanID := traceFromContext(r)
+		traceID, spanID := clockwork.TraceFromContext(r.Context())
 		collector.SetTrace(traceID, spanID)
 		if traceID != "" {
 			cw.RegisterTrace(traceID, collector)
@@ -109,60 +108,6 @@ func (w *responseWriter) WriteHeader(statusCode int) {
 	w.ResponseWriter.WriteHeader(statusCode)
 }
 
-func shouldSkipPath(path string) bool {
-	path = strings.TrimSpace(strings.TrimSuffix(path, "/"))
-	if path == "" {
-		path = "/"
-	}
-	if strings.EqualFold(path, "/favicon.ico") || strings.HasSuffix(strings.ToLower(path), "/favicon.ico") {
-		return true
-	}
-	return strings.HasPrefix(path, "/__clockwork")
-}
-
-func headerExists(headers http.Header, headerName string) bool {
-	if headerName == "" {
-		return false
-	}
-	_, ok := headers[http.CanonicalHeaderKey(headerName)]
-	return ok
-}
-
-func traceFromContext(r *http.Request) (string, string) {
-	if r == nil {
-		return "", ""
-	}
-	spanCtx := trace.SpanFromContext(r.Context()).SpanContext()
-	if !spanCtx.IsValid() {
-		return "", ""
-	}
-	return spanCtx.TraceID().String(), spanCtx.SpanID().String()
-}
-
-func buildRequestURL(req *http.Request) string {
-	if req == nil || req.URL == nil {
-		return ""
-	}
-	if req.URL.IsAbs() {
-		return req.URL.String()
-	}
-
-	scheme := req.Header.Get("X-Forwarded-Proto")
-	if scheme == "" {
-		if req.TLS != nil {
-			scheme = "https"
-		} else {
-			scheme = "http"
-		}
-	}
-
-	host := req.Host
-	if host == "" {
-		return req.URL.String()
-	}
-	return scheme + "://" + host + req.URL.RequestURI()
-}
-
 func resolveMetadataID(r *http.Request, idHeader string) string {
 	if r == nil {
 		return ""
@@ -188,29 +133,4 @@ func writeJSONError(w http.ResponseWriter, status int, message string) {
 	w.Header().Set("X-Clockwork-Version", clockwork.ProtocolVersion)
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]string{"error": message})
-}
-
-func extractSafeHeaders(headers http.Header) map[string]string {
-	safeHeaders := make(map[string]string)
-	safeHeaderNames := map[string]bool{
-		"Content-Type":    true,
-		"Accept":          true,
-		"User-Agent":      true,
-		"Accept-Language": true,
-		"Accept-Encoding": true,
-		"X-Request-ID":    true,
-		"X-City-ID":       true,
-		"X-Stage":         true,
-		"X-App-Version":   true,
-		"Origin":          true,
-		"Referer":         true,
-	}
-
-	for key, values := range headers {
-		if safeHeaderNames[key] && len(values) > 0 {
-			safeHeaders[key] = values[0]
-		}
-	}
-
-	return safeHeaders
 }

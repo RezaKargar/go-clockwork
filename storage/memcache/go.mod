@@ -1,0 +1,10 @@
+module github.com/RezaKargar/go-clockwork/storage/memcache
+
+go 1.24.0
+
+require (
+	github.com/RezaKargar/go-clockwork v0.0.0
+	github.com/bradfitz/gomemcache v0.0.0-20250403215159-8d39553ac7cf
+)
+
+replace github.com/RezaKargar/go-clockwork => ../..

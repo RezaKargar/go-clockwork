@@ -1,14 +1,74 @@
 package cache
 
-import "github.com/RezaKargar/go-clockwork"
+import (
+	"context"
+	"time"
 
-// Cache mirrors the core cache interface.
-type Cache = clockwork.Cache
+	"github.com/RezaKargar/go-clockwork"
+)
 
-// CacheWrapper mirrors the core cache wrapper.
-type CacheWrapper = clockwork.CacheWrapper
+// Cache defines the minimal cache behavior required by Wrap.
+type Cache interface {
+	Get(ctx context.Context, key string) (interface{}, bool)
+	Set(ctx context.Context, key string, value interface{}, ttl time.Duration) error
+	Delete(ctx context.Context, key string) error
+}
+
+// CacheWrapper wraps Cache to emit cache telemetry to active Clockwork collectors.
+type CacheWrapper struct {
+	underlying Cache
+}
 
 // Wrap wraps cache operations with Clockwork instrumentation.
 func Wrap(underlying Cache) Cache {
-	return clockwork.WrapCache(underlying)
+	if underlying == nil {
+		return nil
+	}
+	return &CacheWrapper{underlying: underlying}
+}
+
+// Get retrieves a value from cache and records hit/miss.
+func (c *CacheWrapper) Get(ctx context.Context, key string) (interface{}, bool) {
+	collector := clockwork.CollectorFromContext(ctx)
+	startTime := time.Now()
+	value, found := c.underlying.Get(ctx, key)
+	duration := time.Since(startTime)
+
+	if collector != nil {
+		cacheType := "miss"
+		if found {
+			cacheType = "hit"
+		}
+		collector.AddCacheQuery(cacheType, key, duration)
+	}
+
+	return value, found
+}
+
+// Set stores a value in cache and records write.
+func (c *CacheWrapper) Set(ctx context.Context, key string, value interface{}, ttl time.Duration) error {
+	collector := clockwork.CollectorFromContext(ctx)
+	startTime := time.Now()
+	err := c.underlying.Set(ctx, key, value, ttl)
+	duration := time.Since(startTime)
+
+	if collector != nil && err == nil {
+		collector.AddCacheQuery("write", key, duration)
+	}
+
+	return err
+}
+
+// Delete removes a value from cache and records delete.
+func (c *CacheWrapper) Delete(ctx context.Context, key string) error {
+	collector := clockwork.CollectorFromContext(ctx)
+	startTime := time.Now()
+	err := c.underlying.Delete(ctx, key)
+	duration := time.Since(startTime)
+
+	if collector != nil && err == nil {
+		collector.AddCacheQuery("delete", key, duration)
+	}
+
+	return err
 }

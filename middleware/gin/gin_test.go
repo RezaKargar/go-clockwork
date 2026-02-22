@@ -1,4 +1,4 @@
-package clockwork
+package gin
 
 import (
 	"context"
@@ -8,20 +8,21 @@ import (
 	"testing"
 	"time"
 
+	"github.com/RezaKargar/go-clockwork"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
 
 type mockStorage struct {
-	items []*Metadata
+	items []*clockwork.Metadata
 }
 
-func (m *mockStorage) Store(ctx context.Context, metadata *Metadata) error {
+func (m *mockStorage) Store(ctx context.Context, metadata *clockwork.Metadata) error {
 	m.items = append(m.items, metadata)
 	return nil
 }
 
-func (m *mockStorage) Get(ctx context.Context, id string) (*Metadata, error) {
+func (m *mockStorage) Get(ctx context.Context, id string) (*clockwork.Metadata, error) {
 	for _, item := range m.items {
 		if item.ID == id {
 			return item, nil
@@ -30,7 +31,7 @@ func (m *mockStorage) Get(ctx context.Context, id string) (*Metadata, error) {
 	return nil, nil
 }
 
-func (m *mockStorage) List(ctx context.Context, limit int) ([]*Metadata, error) {
+func (m *mockStorage) List(ctx context.Context, limit int) ([]*clockwork.Metadata, error) {
 	return m.items, nil
 }
 
@@ -41,10 +42,10 @@ func (m *mockStorage) Cleanup(ctx context.Context, maxAge time.Duration) error {
 func TestMiddleware_ActivatesOnlyWhenHeaderPresent(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	cfg := Config{Enabled: true, HeaderName: "X-Clockwork", IDHeader: "X-Clockwork-Id"}
+	cfg := clockwork.Config{Enabled: true, HeaderName: "X-Clockwork", IDHeader: "X-Clockwork-Id"}
 	cfg.Normalize()
 	store := &mockStorage{}
-	cw := NewClockwork(cfg, store)
+	cw := clockwork.NewClockwork(cfg, store)
 
 	router := gin.New()
 	router.Use(Middleware(cw, nil))
@@ -52,7 +53,6 @@ func TestMiddleware_ActivatesOnlyWhenHeaderPresent(t *testing.T) {
 		c.Status(http.StatusOK)
 	})
 
-	// No header => no collector and no storage write.
 	resNoHeader := httptest.NewRecorder()
 	reqNoHeader := httptest.NewRequest(http.MethodGet, "/ok", nil)
 	router.ServeHTTP(resNoHeader, reqNoHeader)
@@ -60,7 +60,6 @@ func TestMiddleware_ActivatesOnlyWhenHeaderPresent(t *testing.T) {
 	require.Empty(t, resNoHeader.Header().Get("X-Clockwork-Id"))
 	require.Len(t, store.items, 0)
 
-	// Header present (even empty) => collector active and metadata stored.
 	resWithHeader := httptest.NewRecorder()
 	reqWithHeader := httptest.NewRequest(http.MethodGet, "/ok", nil)
 	reqWithHeader.Header["X-Clockwork"] = []string{""}
@@ -73,10 +72,10 @@ func TestMiddleware_ActivatesOnlyWhenHeaderPresent(t *testing.T) {
 func TestMiddleware_SkipsFaviconEvenWhenHeaderPresent(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	cfg := Config{Enabled: true, HeaderName: "X-Clockwork", IDHeader: "X-Clockwork-Id"}
+	cfg := clockwork.Config{Enabled: true, HeaderName: "X-Clockwork", IDHeader: "X-Clockwork-Id"}
 	cfg.Normalize()
 	store := &mockStorage{}
-	cw := NewClockwork(cfg, store)
+	cw := clockwork.NewClockwork(cfg, store)
 
 	router := gin.New()
 	router.Use(Middleware(cw, nil))
@@ -97,10 +96,10 @@ func TestMiddleware_SkipsFaviconEvenWhenHeaderPresent(t *testing.T) {
 func TestMiddleware_SkipsFaviconPathVariants(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	cfg := Config{Enabled: true, HeaderName: "X-Clockwork", IDHeader: "X-Clockwork-Id"}
+	cfg := clockwork.Config{Enabled: true, HeaderName: "X-Clockwork", IDHeader: "X-Clockwork-Id"}
 	cfg.Normalize()
 	store := &mockStorage{}
-	cw := NewClockwork(cfg, store)
+	cw := clockwork.NewClockwork(cfg, store)
 
 	router := gin.New()
 	router.Use(Middleware(cw, nil))
@@ -127,10 +126,10 @@ func TestMiddleware_SkipsFaviconPathVariants(t *testing.T) {
 func TestMiddleware_StoresTimelineDataWithResponseDuration(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	cfg := Config{Enabled: true, HeaderName: "X-Clockwork", IDHeader: "X-Clockwork-Id"}
+	cfg := clockwork.Config{Enabled: true, HeaderName: "X-Clockwork", IDHeader: "X-Clockwork-Id"}
 	cfg.Normalize()
-	store := NewInMemoryStorage(20, 1024*1024)
-	cw := NewClockwork(cfg, store)
+	store := clockwork.NewInMemoryStorage(20, 1024*1024)
+	cw := clockwork.NewClockwork(cfg, store)
 
 	router := gin.New()
 	router.Use(Middleware(cw, nil))
@@ -170,7 +169,6 @@ func TestMiddleware_StoresTimelineDataWithResponseDuration(t *testing.T) {
 	controller, ok := payload["controller"].(string)
 	require.True(t, ok)
 	require.NotContains(t, controller, "github.com")
-	require.Contains(t, controller, "clockwork")
 	require.Contains(t, controller, "[/ok]")
 
 	logRaw, ok := payload["log"]
@@ -188,4 +186,53 @@ func TestMiddleware_StoresTimelineDataWithResponseDuration(t *testing.T) {
 	traceFrames, ok := traceRaw.([]any)
 	require.True(t, ok)
 	require.NotEmpty(t, traceFrames)
+}
+
+func TestClockworkRoute_HeaderIDStrictOverride(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	cfg := clockwork.Config{Enabled: true, HeaderName: "X-Clockwork", IDHeader: "X-Clockwork-Id"}
+	cfg.Normalize()
+	store := clockwork.NewInMemoryStorage(10, 1024*1024)
+	cw := clockwork.NewClockwork(cfg, store)
+
+	headerMeta := &clockwork.Metadata{ID: "header-id", Method: "GET", URI: "/header"}
+	routeMeta := &clockwork.Metadata{ID: "route-id", Method: "GET", URI: "/route"}
+	require.NoError(t, cw.SaveMetadata(context.Background(), headerMeta))
+	require.NoError(t, cw.SaveMetadata(context.Background(), routeMeta))
+
+	router := gin.New()
+	RegisterRoutes(router, cw, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/__clockwork/route-id", nil)
+	req.Header.Set("X-Clockwork-Id", "header-id")
+	res := httptest.NewRecorder()
+	router.ServeHTTP(res, req)
+
+	require.Equal(t, http.StatusOK, res.Code)
+
+	var got clockwork.Metadata
+	require.NoError(t, json.Unmarshal(res.Body.Bytes(), &got))
+	require.Equal(t, "header-id", got.ID)
+}
+
+func TestClockworkRoute_HeaderIDStrictOverrideNotFound(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	cfg := clockwork.Config{Enabled: true, HeaderName: "X-Clockwork", IDHeader: "X-Clockwork-Id"}
+	cfg.Normalize()
+	store := clockwork.NewInMemoryStorage(10, 1024*1024)
+	cw := clockwork.NewClockwork(cfg, store)
+
+	require.NoError(t, cw.SaveMetadata(context.Background(), &clockwork.Metadata{ID: "route-id", Method: "GET", URI: "/route"}))
+
+	router := gin.New()
+	RegisterRoutes(router, cw, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/__clockwork/route-id", nil)
+	req.Header.Set("X-Clockwork-Id", "missing-id")
+	res := httptest.NewRecorder()
+	router.ServeHTTP(res, req)
+
+	require.Equal(t, http.StatusNotFound, res.Code)
 }

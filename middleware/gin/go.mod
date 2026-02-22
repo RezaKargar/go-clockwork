@@ -1,25 +1,19 @@
-module github.com/RezaKargar/go-clockwork
+module github.com/RezaKargar/go-clockwork/middleware/gin
 
 go 1.24.0
 
 require (
-	github.com/RezaKargar/go-clockwork/middleware/gin v0.0.0
-	github.com/RezaKargar/go-clockwork/storage/memcache v0.0.0
-	github.com/RezaKargar/go-clockwork/storage/redis v0.0.0
+	github.com/RezaKargar/go-clockwork v0.0.0
 	github.com/gin-gonic/gin v1.11.0
-	github.com/google/uuid v1.6.0
 	github.com/stretchr/testify v1.11.1
-	go.opentelemetry.io/otel/trace v1.39.0
 )
 
 require (
-	github.com/bradfitz/gomemcache v0.0.0-20250403215159-8d39553ac7cf // indirect
 	github.com/bytedance/sonic v1.14.0 // indirect
 	github.com/bytedance/sonic/loader v0.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cloudwego/base64x v0.1.6 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/gabriel-vasile/mimetype v1.4.8 // indirect
 	github.com/gin-contrib/sse v1.1.0 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
@@ -27,6 +21,7 @@ require (
 	github.com/go-playground/validator/v10 v10.27.0 // indirect
 	github.com/goccy/go-json v0.10.2 // indirect
 	github.com/goccy/go-yaml v1.18.0 // indirect
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
@@ -37,10 +32,10 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/quic-go/qpack v0.5.1 // indirect
 	github.com/quic-go/quic-go v0.54.0 // indirect
-	github.com/redis/go-redis/v9 v9.8.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.3.0 // indirect
 	go.opentelemetry.io/otel v1.39.0 // indirect
+	go.opentelemetry.io/otel/trace v1.39.0 // indirect
 	go.uber.org/mock v0.5.0 // indirect
 	golang.org/x/arch v0.20.0 // indirect
 	golang.org/x/crypto v0.40.0 // indirect
@@ -54,8 +49,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace (
-	github.com/RezaKargar/go-clockwork/middleware/gin => ./middleware/gin
-	github.com/RezaKargar/go-clockwork/storage/memcache => ./storage/memcache
-	github.com/RezaKargar/go-clockwork/storage/redis => ./storage/redis
-)
+replace github.com/RezaKargar/go-clockwork => ../..

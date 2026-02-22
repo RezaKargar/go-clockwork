@@ -16,10 +16,9 @@ func TestLoad_FromYAMLAndDotEnvOverride(t *testing.T) {
 	require.NoError(t, os.WriteFile(configPath, []byte(`clockwork:
   enabled: true
   header_name: "X-Clockwork"
-  storage_type: "memory"
   max_requests: 100
 `), 0o600))
-	require.NoError(t, os.WriteFile(envPath, []byte("CLOCKWORK_A_STORAGE_TYPE=redis\nCLOCKWORK_A_MAX_REQUESTS=321\n"), 0o600))
+	require.NoError(t, os.WriteFile(envPath, []byte("CLOCKWORK_A_MAX_REQUESTS=321\n"), 0o600))
 
 	cfg, err := Load(LoadOptions{
 		ConfigPath: dir,
@@ -29,8 +28,9 @@ func TestLoad_FromYAMLAndDotEnvOverride(t *testing.T) {
 		EnvFiles:   []string{envPath},
 	})
 	require.NoError(t, err)
-	require.Equal(t, "redis", cfg.StorageType)
 	require.Equal(t, 321, cfg.MaxRequests)
+	require.True(t, cfg.Enabled)
+	require.Equal(t, "X-Clockwork", cfg.HeaderName)
 }
 
 func TestLoad_FromRootConfigShape(t *testing.T) {
@@ -39,9 +39,7 @@ func TestLoad_FromRootConfigShape(t *testing.T) {
 
 	require.NoError(t, os.WriteFile(configPath, []byte(`enabled: true
 header_name: "X-Clockwork"
-storage_type: "memcache"
-memcache_endpoints:
-  - "127.0.0.1:11211"
+max_requests: 50
 `), 0o600))
 
 	cfg, err := Load(LoadOptions{
@@ -51,6 +49,7 @@ memcache_endpoints:
 		EnvPrefix:  "CLOCKWORK_B",
 	})
 	require.NoError(t, err)
-	require.Equal(t, "memcache", cfg.StorageType)
-	require.Equal(t, []string{"127.0.0.1:11211"}, cfg.MemcacheEndpoints)
+	require.True(t, cfg.Enabled)
+	require.Equal(t, "X-Clockwork", cfg.HeaderName)
+	require.Equal(t, 50, cfg.MaxRequests)
 }

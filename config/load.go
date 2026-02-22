@@ -86,7 +86,6 @@ func bindClockworkEnv(v *viper.Viper, envPrefix string) {
 		"enabled":                   "ENABLED",
 		"header_name":               "HEADER_NAME",
 		"id_header_name":            "ID_HEADER_NAME",
-		"storage_type":              "STORAGE_TYPE",
 		"max_requests":              "MAX_REQUESTS",
 		"max_storage_bytes":         "MAX_STORAGE_BYTES",
 		"max_request_payload_bytes": "MAX_REQUEST_PAYLOAD_BYTES",
@@ -98,12 +97,6 @@ func bindClockworkEnv(v *viper.Viper, envPrefix string) {
 		"slow_query_threshold":      "SLOW_QUERY_THRESHOLD",
 		"cleanup_interval":          "CLEANUP_INTERVAL",
 		"request_retention_time":    "REQUEST_RETENTION_TIME",
-		"redis_endpoint":            "REDIS_ENDPOINT",
-		"redis_password":            "REDIS_PASSWORD",
-		"redis_db":                  "REDIS_DB",
-		"redis_prefix":              "REDIS_PREFIX",
-		"memcache_endpoints":        "MEMCACHE_ENDPOINTS",
-		"memcache_prefix":           "MEMCACHE_PREFIX",
 	}
 
 	for key, suffix := range keys {
@@ -129,9 +122,6 @@ func applyEnvOverrides(cfg *clockwork.Config, envPrefix string) {
 	}
 	if value, ok := lookupEnv(key("ID_HEADER_NAME")); ok {
 		cfg.IDHeader = value
-	}
-	if value, ok := lookupEnv(key("STORAGE_TYPE")); ok {
-		cfg.StorageType = value
 	}
 	if value, ok := lookupEnv(key("MAX_REQUESTS")); ok {
 		if parsed, err := strconv.Atoi(value); err == nil {
@@ -187,34 +177,6 @@ func applyEnvOverrides(cfg *clockwork.Config, envPrefix string) {
 		if parsed, err := time.ParseDuration(value); err == nil {
 			cfg.RequestRetentionTime = parsed
 		}
-	}
-	if value, ok := lookupEnv(key("REDIS_ENDPOINT")); ok {
-		cfg.RedisEndpoint = value
-	}
-	if value, ok := lookupEnv(key("REDIS_PASSWORD")); ok {
-		cfg.RedisPassword = value
-	}
-	if value, ok := lookupEnv(key("REDIS_DB")); ok {
-		if parsed, err := strconv.Atoi(value); err == nil {
-			cfg.RedisDB = parsed
-		}
-	}
-	if value, ok := lookupEnv(key("REDIS_PREFIX")); ok {
-		cfg.RedisPrefix = value
-	}
-	if value, ok := lookupEnv(key("MEMCACHE_ENDPOINTS")); ok {
-		parts := strings.Split(value, ",")
-		endpoints := make([]string, 0, len(parts))
-		for _, part := range parts {
-			trimmed := strings.TrimSpace(part)
-			if trimmed != "" {
-				endpoints = append(endpoints, trimmed)
-			}
-		}
-		cfg.MemcacheEndpoints = endpoints
-	}
-	if value, ok := lookupEnv(key("MEMCACHE_PREFIX")); ok {
-		cfg.MemcachePrefix = value
 	}
 }
 

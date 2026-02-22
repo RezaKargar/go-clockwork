@@ -36,6 +36,29 @@ func limitsFromConfig(cfg Config) collectorLimits {
 	}
 }
 
+// Logger is a minimal logger used by middleware and adapters.
+// Implementations can wrap zap, slog, or any logger.
+type Logger interface {
+	Warn(msg string, keysAndValues ...interface{})
+}
+
+// DataCollector is the interface for per-request data collection.
+// *Collector implements this interface; custom collectors can implement it to work with Clockwork.
+type DataCollector interface {
+	ID() string
+	SetHeaders(headers map[string]string)
+	SetURL(url string)
+	SetController(controller string)
+	SetTrace(traceID, spanID string)
+	SetResponseData(status int, duration time.Duration)
+	AddDatabaseQuery(query string, duration time.Duration, connection string, slow bool)
+	AddCacheQuery(cacheType, key string, duration time.Duration)
+	AddLogEntry(level, message string, fields map[string]interface{})
+	AddLogEntryWithTrace(level, message string, fields map[string]interface{}, trace []LogTraceFrame)
+	AddTimelineEvent(name, description string, start, end time.Time, color string)
+	GetMetadata() *Metadata
+}
+
 // Collector represents per-request Clockwork data collection.
 type Collector struct {
 	id               string

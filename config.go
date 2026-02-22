@@ -1,14 +1,7 @@
 package clockwork
 
 import (
-	"strings"
 	"time"
-)
-
-const (
-	storageMemory   = "memory"
-	storageRedis    = "redis"
-	storageMemcache = "memcache"
 )
 
 // Config holds Clockwork configuration.
@@ -16,8 +9,6 @@ type Config struct {
 	Enabled    bool   `mapstructure:"enabled"`
 	HeaderName string `mapstructure:"header_name"`
 	IDHeader   string `mapstructure:"id_header_name"`
-
-	StorageType string `mapstructure:"storage_type"`
 
 	MaxRequests            int   `mapstructure:"max_requests"`
 	MaxStorageBytes        int64 `mapstructure:"max_storage_bytes"`
@@ -32,14 +23,6 @@ type Config struct {
 	SlowQueryThreshold   time.Duration `mapstructure:"slow_query_threshold"`
 	CleanupInterval      time.Duration `mapstructure:"cleanup_interval"`
 	RequestRetentionTime time.Duration `mapstructure:"request_retention_time"`
-
-	RedisEndpoint string `mapstructure:"redis_endpoint"`
-	RedisPassword string `mapstructure:"redis_password"`
-	RedisDB       int    `mapstructure:"redis_db"`
-	RedisPrefix   string `mapstructure:"redis_prefix"`
-
-	MemcacheEndpoints []string `mapstructure:"memcache_endpoints"`
-	MemcachePrefix    string   `mapstructure:"memcache_prefix"`
 }
 
 // DefaultConfig returns baseline defaults for new deployments.
@@ -48,7 +31,6 @@ func DefaultConfig() Config {
 		Enabled:                true,
 		HeaderName:             "X-Clockwork",
 		IDHeader:               "X-Clockwork-Id",
-		StorageType:            storageMemory,
 		MaxRequests:            200,
 		MaxStorageBytes:        64 * 1024 * 1024,
 		MaxRequestPayloadBytes: 256 * 1024,
@@ -60,13 +42,10 @@ func DefaultConfig() Config {
 		SlowQueryThreshold:     100 * time.Millisecond,
 		CleanupInterval:        5 * time.Minute,
 		RequestRetentionTime:   time.Hour,
-		RedisDB:                0,
-		RedisPrefix:            "clockwork",
-		MemcachePrefix:         "clockwork",
 	}
 }
 
-// Normalize applies defaults and lowercases known enum fields.
+// Normalize applies defaults.
 func (c *Config) Normalize() {
 	if c == nil {
 		return
@@ -79,10 +58,6 @@ func (c *Config) Normalize() {
 	if c.IDHeader == "" {
 		c.IDHeader = d.IDHeader
 	}
-	if c.StorageType == "" {
-		c.StorageType = d.StorageType
-	}
-	c.StorageType = strings.ToLower(strings.TrimSpace(c.StorageType))
 	if c.MaxRequests <= 0 {
 		c.MaxRequests = d.MaxRequests
 	}
@@ -115,11 +90,5 @@ func (c *Config) Normalize() {
 	}
 	if c.RequestRetentionTime <= 0 {
 		c.RequestRetentionTime = d.RequestRetentionTime
-	}
-	if c.RedisPrefix == "" {
-		c.RedisPrefix = d.RedisPrefix
-	}
-	if c.MemcachePrefix == "" {
-		c.MemcachePrefix = d.MemcachePrefix
 	}
 }

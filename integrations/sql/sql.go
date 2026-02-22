@@ -7,7 +7,7 @@ import (
 	"github.com/RezaKargar/go-clockwork"
 )
 
-// Observation is a generic SQL query observation payload.
+// Observation is a SQL query observation payload.
 type Observation struct {
 	Operation  string
 	Query      string
@@ -17,23 +17,41 @@ type Observation struct {
 
 // Observer forwards SQL observations to Clockwork collectors.
 type Observer struct {
-	inner *clockwork.SQLObserver
+	cw                 *clockwork.Clockwork
+	slowQueryThreshold time.Duration
 }
 
-// NewObserver creates a SQL observer.
+// NewObserver creates a SQL observer that records queries to the active request collector.
 func NewObserver(cw *clockwork.Clockwork, slowQueryThreshold time.Duration) *Observer {
-	return &Observer{inner: clockwork.NewSQLObserver(cw, slowQueryThreshold)}
+	if cw == nil || !cw.IsEnabled() {
+		return nil
+	}
+	if slowQueryThreshold <= 0 {
+		slowQueryThreshold = cw.Config().SlowQueryThreshold
+	}
+	return &Observer{cw: cw, slowQueryThreshold: slowQueryThreshold}
 }
 
-// OnQuery forwards observation into active request collector.
+// OnQuery records the observation on the active request collector from context.
 func (o *Observer) OnQuery(ctx context.Context, observation Observation) {
-	if o == nil || o.inner == nil {
+	if o == nil || o.cw == nil {
 		return
 	}
-	o.inner.OnQuery(ctx, clockwork.QueryObservation{
-		Operation:  observation.Operation,
-		Query:      observation.Query,
-		Duration:   observation.Duration,
-		Connection: observation.Connection,
-	})
+
+	collector := clockwork.CollectorFromContext(ctx)
+	if collector == nil {
+		return
+	}
+
+	query := observation.Query
+	if query == "" {
+		query = observation.Operation
+	}
+	conn := observation.Connection
+	if conn == "" {
+		conn = "sql"
+	}
+
+	slow := observation.Duration > o.slowQueryThreshold
+	collector.AddDatabaseQuery(query, observation.Duration, conn, slow)
 }

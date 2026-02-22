@@ -1,4 +1,4 @@
-package clockwork
+package redis
 
 import (
 	"context"
@@ -7,11 +7,22 @@ import (
 	"strings"
 	"time"
 
+	"github.com/RezaKargar/go-clockwork"
 	redis "github.com/redis/go-redis/v9"
 )
 
-// RedisStorage stores Clockwork payloads in Redis.
-type RedisStorage struct {
+// Config holds Redis storage configuration.
+type Config struct {
+	Endpoint   string
+	Password   string
+	DB         int
+	Prefix     string
+	TTL        time.Duration
+	MaxEntries int
+}
+
+// Storage implements clockwork.Storage using Redis.
+type Storage struct {
 	client     *redis.Client
 	prefix     string
 	indexKey   string
@@ -19,40 +30,40 @@ type RedisStorage struct {
 	ttl        time.Duration
 }
 
-// NewRedisStorage creates Redis-backed storage.
-func NewRedisStorage(cfg Config) (Storage, error) {
-	endpoint := strings.TrimSpace(cfg.RedisEndpoint)
+// New creates Redis-backed storage for Clockwork.
+func New(cfg Config) (clockwork.Storage, error) {
+	endpoint := strings.TrimSpace(cfg.Endpoint)
 	if endpoint == "" {
-		return nil, fmt.Errorf("redis_endpoint is required for redis storage")
+		return nil, fmt.Errorf("redis endpoint is required")
 	}
 
-	ttl := cfg.RequestRetentionTime
+	ttl := cfg.TTL
 	if ttl <= 0 {
 		ttl = time.Hour
 	}
 
-	prefix := cfg.RedisPrefix
+	prefix := strings.TrimSpace(cfg.Prefix)
 	if prefix == "" {
 		prefix = "clockwork"
 	}
 
 	client := redis.NewClient(&redis.Options{
 		Addr:     endpoint,
-		Password: cfg.RedisPassword,
-		DB:       cfg.RedisDB,
+		Password: cfg.Password,
+		DB:       cfg.DB,
 	})
 
-	return &RedisStorage{
+	return &Storage{
 		client:     client,
 		prefix:     prefix,
 		indexKey:   prefix + ":index",
-		maxEntries: cfg.MaxRequests,
+		maxEntries: cfg.MaxEntries,
 		ttl:        ttl,
 	}, nil
 }
 
 // Store saves metadata and updates recency index.
-func (s *RedisStorage) Store(ctx context.Context, metadata *Metadata) error {
+func (s *Storage) Store(ctx context.Context, metadata *clockwork.Metadata) error {
 	if metadata == nil {
 		return fmt.Errorf("metadata cannot be nil")
 	}
@@ -82,7 +93,7 @@ func (s *RedisStorage) Store(ctx context.Context, metadata *Metadata) error {
 }
 
 // Get fetches metadata by id.
-func (s *RedisStorage) Get(ctx context.Context, id string) (*Metadata, error) {
+func (s *Storage) Get(ctx context.Context, id string) (*clockwork.Metadata, error) {
 	value, err := s.client.Get(ctx, s.reqKey(id)).Bytes()
 	if err != nil {
 		if err == redis.Nil {
@@ -91,7 +102,7 @@ func (s *RedisStorage) Get(ctx context.Context, id string) (*Metadata, error) {
 		return nil, fmt.Errorf("redis get metadata: %w", err)
 	}
 
-	var metadata Metadata
+	var metadata clockwork.Metadata
 	if err := json.Unmarshal(value, &metadata); err != nil {
 		return nil, fmt.Errorf("unmarshal metadata: %w", err)
 	}
@@ -100,7 +111,7 @@ func (s *RedisStorage) Get(ctx context.Context, id string) (*Metadata, error) {
 }
 
 // List returns most recent metadata first.
-func (s *RedisStorage) List(ctx context.Context, limit int) ([]*Metadata, error) {
+func (s *Storage) List(ctx context.Context, limit int) ([]*clockwork.Metadata, error) {
 	if limit <= 0 {
 		limit = s.maxEntries
 	}
@@ -113,13 +124,13 @@ func (s *RedisStorage) List(ctx context.Context, limit int) ([]*Metadata, error)
 		return nil, fmt.Errorf("redis list index: %w", err)
 	}
 
-	out := make([]*Metadata, 0, len(ids))
+	out := make([]*clockwork.Metadata, 0, len(ids))
 	for _, id := range ids {
 		value, err := s.client.Get(ctx, s.reqKey(id)).Bytes()
 		if err != nil {
 			continue
 		}
-		var metadata Metadata
+		var metadata clockwork.Metadata
 		if err := json.Unmarshal(value, &metadata); err != nil {
 			continue
 		}
@@ -130,10 +141,10 @@ func (s *RedisStorage) List(ctx context.Context, limit int) ([]*Metadata, error)
 }
 
 // Cleanup is a no-op for Redis since TTL handles expiry.
-func (s *RedisStorage) Cleanup(ctx context.Context, maxAge time.Duration) error {
+func (s *Storage) Cleanup(ctx context.Context, maxAge time.Duration) error {
 	return nil
 }
 
-func (s *RedisStorage) reqKey(id string) string {
+func (s *Storage) reqKey(id string) string {
 	return s.prefix + ":req:" + id
 }

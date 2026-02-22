@@ -24,13 +24,8 @@ func Middleware(cw *clockwork.Clockwork, next http.Handler) http.Handler {
 			return
 		}
 
-		if clockwork.ShouldSkipPath(r.URL.Path) || !clockwork.ShouldCapture(r.Header, cw.Config().HeaderName) {
-			next.ServeHTTP(w, r)
-			return
-		}
-
-		collector := cw.NewCollector(r.Method, r.RequestURI)
-		if collector == nil {
+		collector, ok := clockwork.NewRequestCapture(cw, r.Method, r.URL.Path, r.RequestURI, r.Header)
+		if !ok {
 			next.ServeHTTP(w, r)
 			return
 		}

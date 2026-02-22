@@ -10,8 +10,8 @@
 - **Pluggable storage** — In-memory (default), with optional Redis and Memcache in separate modules
 - **Pluggable framework adapters** — net/http (in core), Gin, Chi, Fiber, Echo in separate modules
 - **Metadata API** — `GET /__clockwork/:id` (Clockwork extension compatible)
-- **Integrations** — Cache and SQL in core; Zap in a separate module
-- **Interfaces** — Implement `Storage`, `DataCollector`, or add your own middleware
+- **Integrations** — Cache, SQL, and Zap in separate modules; implement `DataSource` for custom data
+- **Interfaces** — Implement `Storage`, `DataCollector`, `DataSource`, or add your own middleware
 
 ## Install
 
@@ -40,6 +40,8 @@ go get github.com/RezaKargar/go-clockwork/middleware/echo
 **Optional integrations:**
 
 ```bash
+go get github.com/RezaKargar/go-clockwork/integrations/cache
+go get github.com/RezaKargar/go-clockwork/integrations/sql
 go get github.com/RezaKargar/go-clockwork/integrations/zap
 go get github.com/RezaKargar/go-clockwork/config
 ```
@@ -97,6 +99,25 @@ func (s *MyStorage) Cleanup(ctx context.Context, maxAge time.Duration) error { .
 cw := clockwork.NewClockwork(cfg, &MyStorage{})
 ```
 
+## DataSource and custom data
+
+Register a `DataSource` to attach custom data when each request completes. Use `SetUserData` on the collector to add key-value data that appears in `Metadata.UserData`:
+
+```go
+type myDataSource struct{}
+func (d *myDataSource) Name() string { return "custom" }
+func (d *myDataSource) Resolve(ctx context.Context, c clockwork.DataCollector) {
+    c.SetUserData("memory_alloc_mb", runtimeMemMB())
+}
+
+cw := clockwork.NewClockwork(cfg, store)
+cw.RegisterDataSource(&myDataSource{})
+```
+
+## Extending middleware
+
+Framework adapters use the same flow: call `clockwork.NewRequestCapture(cw, method, path, uri, headers)`; if it returns `(collector, true)`, set headers/URL/trace on the collector, put it in context, run the handler, then `cw.CompleteRequest(ctx, collector, status, duration)`. See [docs/architecture.md](docs/architecture.md) for the middleware contract.
+
 ## HTTP API
 
 - `GET /__clockwork/:id` — Returns captured metadata for the given request ID.
@@ -113,8 +134,8 @@ cw := clockwork.NewClockwork(cfg, &MyStorage{})
 | `.../middleware/fiber` | Fiber middleware and routes |
 | `.../middleware/echo` | Echo middleware and routes |
 | `.../middleware/http` | net/http middleware (part of core module) |
-| `.../integrations/cache` | Cache wrapper (core module) |
-| `.../integrations/sql` | SQL observer (core module) |
+| `.../integrations/cache` | Cache wrapper (separate module) |
+| `.../integrations/sql` | SQL observer (separate module) |
 | `.../integrations/zap` | Zap log integration |
 | `.../config` | YAML + env config loader |
 

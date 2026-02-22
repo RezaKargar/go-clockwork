@@ -32,6 +32,9 @@ type Metadata struct {
 	MemoryUsage uint64         `json:"memoryUsage"`
 	Truncated   bool           `json:"truncated,omitempty"`
 	Dropped     map[string]int `json:"dropped,omitempty"`
+
+	// UserData holds arbitrary data from DataSource implementations and custom integrations.
+	UserData map[string]interface{} `json:"userData,omitempty"`
 }
 
 // DatabaseQuery represents a database query in Clockwork payload.

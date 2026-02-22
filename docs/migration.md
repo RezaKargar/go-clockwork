@@ -39,9 +39,13 @@ No change: still `import clockworkhttp "github.com/RezaKargar/go-clockwork/middl
 
 ## Cache integration
 
-**Before:** `clockwork.WrapCache(cache)` and `clockwork.Cache` / `clockwork.CacheWrapper`.
+**Before:** `clockwork.WrapCache(cache)` and `clockwork.Cache` / `clockwork.CacheWrapper`, or cache in core.
 
-**After:** Use the cache integration package (same module as core):
+**After:** Add the cache integration module and use the cache package:
+
+```bash
+go get github.com/RezaKargar/go-clockwork/integrations/cache
+```
 
 ```go
 import "github.com/RezaKargar/go-clockwork/integrations/cache"
@@ -53,9 +57,13 @@ Types: `cache.Cache`, `cache.CacheWrapper`, `cache.Wrap`.
 
 ## SQL integration
 
-**Before:** `clockwork.NewSQLObserver(cw, threshold)` and `clockwork.QueryObservation`.
+**Before:** `clockwork.NewSQLObserver(cw, threshold)` and `clockwork.QueryObservation`, or sql in core.
 
-**After:** Use the sql integration package:
+**After:** Add the sql integration module and use the sql package:
+
+```bash
+go get github.com/RezaKargar/go-clockwork/integrations/sql
+```
 
 ```go
 import "github.com/RezaKargar/go-clockwork/integrations/sql"

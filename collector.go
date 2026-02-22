@@ -56,6 +56,7 @@ type DataCollector interface {
 	AddLogEntry(level, message string, fields map[string]interface{})
 	AddLogEntryWithTrace(level, message string, fields map[string]interface{}, trace []LogTraceFrame)
 	AddTimelineEvent(name, description string, start, end time.Time, color string)
+	SetUserData(key string, value interface{})
 	GetMetadata() *Metadata
 }
 
@@ -80,6 +81,7 @@ type Collector struct {
 	cacheQueries    []CacheQuery
 	logEntries      []LogEntry
 	timelineEvents  []TimelineEvent
+	userData        map[string]interface{}
 	dropped         map[string]int
 	truncated       bool
 
@@ -109,6 +111,7 @@ func NewCollector(method, uri string, limits collectorLimits) *Collector {
 		logEntries:       make([]LogEntry, 0, 16),
 		timelineEvents:   make([]TimelineEvent, 0, 16),
 		dropped:          make(map[string]int),
+		userData:         make(map[string]interface{}),
 		memoryUsageStart: mem.Alloc,
 		limits:           limits,
 	}
@@ -280,6 +283,20 @@ func (c *Collector) AddTimelineEvent(name, description string, start, end time.T
 	c.appendTimelineLocked(name, description, unixFromTime(start), unixFromTime(end), color)
 }
 
+// SetUserData attaches a key-value pair for custom data (e.g. from a DataSource).
+// Values are included in Metadata.UserData and shown in the Clockwork UI.
+func (c *Collector) SetUserData(key string, value interface{}) {
+	if c == nil || key == "" {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.userData == nil {
+		c.userData = make(map[string]interface{})
+	}
+	c.userData[key] = value
+}
+
 // GetMetadata returns collected metadata.
 func (c *Collector) GetMetadata() *Metadata {
 	if c == nil {
@@ -322,6 +339,13 @@ func (c *Collector) GetMetadata() *Metadata {
 		TimelineEvents:       copyTimeline(c.timelineEvents),
 		MemoryUsage:          memoryDelta,
 		Truncated:            c.truncated,
+	}
+
+	if len(c.userData) > 0 {
+		meta.UserData = make(map[string]interface{}, len(c.userData))
+		for k, v := range c.userData {
+			meta.UserData[k] = v
+		}
 	}
 
 	if len(c.dropped) > 0 {

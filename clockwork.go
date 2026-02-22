@@ -13,6 +13,9 @@ type Clockwork struct {
 	config  Config
 	storage Storage
 
+	dataSources   []DataSource
+	dataSourcesMu sync.RWMutex
+
 	activeByTrace sync.Map // map[traceID]*Collector
 	activeCount   atomic.Int64
 }
@@ -98,6 +101,17 @@ func (c *Clockwork) NewCollector(method, uri string) *Collector {
 	return NewCollector(method, uri, limitsFromConfig(c.config))
 }
 
+// RegisterDataSource adds a data source that will be invoked when each request completes.
+// Data sources can call collector methods (e.g. SetUserData) to attach custom data.
+func (c *Clockwork) RegisterDataSource(ds DataSource) {
+	if c == nil || ds == nil {
+		return
+	}
+	c.dataSourcesMu.Lock()
+	defer c.dataSourcesMu.Unlock()
+	c.dataSources = append(c.dataSources, ds)
+}
+
 // CompleteRequest finalizes and stores collected request data.
 func (c *Clockwork) CompleteRequest(ctx context.Context, collector *Collector, status int, duration time.Duration) error {
 	if c == nil || collector == nil {
@@ -105,6 +119,14 @@ func (c *Clockwork) CompleteRequest(ctx context.Context, collector *Collector, s
 	}
 
 	collector.SetResponseData(status, duration)
+
+	c.dataSourcesMu.RLock()
+	sources := c.dataSources
+	c.dataSourcesMu.RUnlock()
+	for _, ds := range sources {
+		ds.Resolve(ctx, collector)
+	}
+
 	metadata := collector.GetMetadata()
 	if metadata == nil {
 		return nil

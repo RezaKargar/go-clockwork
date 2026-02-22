@@ -89,3 +89,20 @@ func TraceFromContext(ctx context.Context) (traceID, spanID string) {
 	}
 	return spanCtx.TraceID().String(), spanCtx.SpanID().String()
 }
+
+// NewRequestCapture decides whether to capture this request and, if so, returns a new Collector.
+// path is used for skip logic (e.g. favicon, /__clockwork); uri is stored on the collector (e.g. request URI).
+// Framework middleware should call this first; if ok is false, skip Clockwork and run the next handler.
+func NewRequestCapture(cw *Clockwork, method, path, uri string, headers http.Header) (*Collector, bool) {
+	if cw == nil || !cw.IsEnabled() {
+		return nil, false
+	}
+	if ShouldSkipPath(path) || !ShouldCapture(headers, cw.Config().HeaderName) {
+		return nil, false
+	}
+	collector := cw.NewCollector(method, uri)
+	if collector == nil {
+		return nil, false
+	}
+	return collector, true
+}

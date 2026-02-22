@@ -14,8 +14,8 @@ type Cache interface {
 	Delete(ctx context.Context, key string) error
 }
 
-// CacheWrapper wraps Cache to emit cache telemetry to active Clockwork collectors.
-type CacheWrapper struct {
+// Wrapper wraps Cache to emit cache telemetry to active Clockwork collectors.
+type Wrapper struct {
 	underlying Cache
 }
 
@@ -24,11 +24,11 @@ func Wrap(underlying Cache) Cache {
 	if underlying == nil {
 		return nil
 	}
-	return &CacheWrapper{underlying: underlying}
+	return &Wrapper{underlying: underlying}
 }
 
 // Get retrieves a value from cache and records hit/miss.
-func (c *CacheWrapper) Get(ctx context.Context, key string) (interface{}, bool) {
+func (c *Wrapper) Get(ctx context.Context, key string) (interface{}, bool) {
 	collector := clockwork.CollectorFromContext(ctx)
 	startTime := time.Now()
 	value, found := c.underlying.Get(ctx, key)
@@ -46,7 +46,7 @@ func (c *CacheWrapper) Get(ctx context.Context, key string) (interface{}, bool) 
 }
 
 // Set stores a value in cache and records write.
-func (c *CacheWrapper) Set(ctx context.Context, key string, value interface{}, ttl time.Duration) error {
+func (c *Wrapper) Set(ctx context.Context, key string, value interface{}, ttl time.Duration) error {
 	collector := clockwork.CollectorFromContext(ctx)
 	startTime := time.Now()
 	err := c.underlying.Set(ctx, key, value, ttl)
@@ -60,7 +60,7 @@ func (c *CacheWrapper) Set(ctx context.Context, key string, value interface{}, t
 }
 
 // Delete removes a value from cache and records delete.
-func (c *CacheWrapper) Delete(ctx context.Context, key string) error {
+func (c *Wrapper) Delete(ctx context.Context, key string) error {
 	collector := clockwork.CollectorFromContext(ctx)
 	startTime := time.Now()
 	err := c.underlying.Delete(ctx, key)

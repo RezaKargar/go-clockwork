@@ -12,8 +12,9 @@ Package: `github.com/RezaKargar/go-clockwork`
 - `DataSource` interface for pluggable data (e.g. custom metrics) via `RegisterDataSource`
 - Helper functions for middleware (`ShouldSkipPath`, `ShouldCapture`, `BuildRequestURL`, `ExtractSafeHeaders`, `TraceFromContext`, `NewRequestCapture`)
 - net/http middleware (`middleware/http` package, part of core module)
+- Config loader (`config` package): YAML and `.env` with `CLOCKWORK_*` overrides (Viper + gotenv)
 
-Core does not import Gin, Chi, Fiber, Echo, Redis, Memcache, Zap, or Viper. Integrations (cache, SQL, zap) are separate modules.
+Core does not import Gin, Chi, Fiber, Echo, Redis, Memcache, or Zap. Integrations (cache, SQL, zap) are separate modules.
 
 ## Storage modules
 
@@ -40,9 +41,9 @@ Each adapter uses the core helpers and implements framework-specific middleware 
 - `github.com/RezaKargar/go-clockwork/integrations/sql` — SQL observer (separate module)
 - `github.com/RezaKargar/go-clockwork/integrations/zap` — Zap core wrapper (separate module)
 
-## Config module
+## Config (core)
 
-- `github.com/RezaKargar/go-clockwork/config` — Load config from YAML and `.env` with `CLOCKWORK_*` overrides.
+- `github.com/RezaKargar/go-clockwork/config` — Load config from YAML and `.env` with `CLOCKWORK_*` overrides. Part of the core module.
 
 ## Interfaces
 

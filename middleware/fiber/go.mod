@@ -3,7 +3,7 @@ module github.com/RezaKargar/go-clockwork/middleware/fiber
 go 1.26
 
 require (
-	github.com/RezaKargar/go-clockwork v0.0.0
+	github.com/RezaKargar/go-clockwork v0.2.0
 	github.com/gofiber/fiber/v2 v2.52.6
 )
 

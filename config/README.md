@@ -1,12 +1,6 @@
 # Config loader for go-clockwork
 
-Load Clockwork config from YAML and `.env` with `CLOCKWORK_*` env overrides.
-
-## Install
-
-```bash
-go get github.com/RezaKargar/go-clockwork/config
-```
+Load Clockwork config from YAML and `.env` with `CLOCKWORK_*` env overrides. Part of the core module (no separate install).
 
 ## Usage
 

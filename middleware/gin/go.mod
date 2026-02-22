@@ -3,7 +3,7 @@ module github.com/RezaKargar/go-clockwork/middleware/gin
 go 1.26
 
 require (
-	github.com/RezaKargar/go-clockwork v0.0.0
+	github.com/RezaKargar/go-clockwork v0.2.0
 	github.com/gin-gonic/gin v1.11.0
 	github.com/stretchr/testify v1.11.1
 )

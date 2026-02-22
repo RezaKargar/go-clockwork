@@ -43,8 +43,9 @@ go get github.com/RezaKargar/go-clockwork/middleware/echo
 go get github.com/RezaKargar/go-clockwork/integrations/cache
 go get github.com/RezaKargar/go-clockwork/integrations/sql
 go get github.com/RezaKargar/go-clockwork/integrations/zap
-go get github.com/RezaKargar/go-clockwork/config
 ```
+
+Config loading (YAML + .env) is in the core module: `github.com/RezaKargar/go-clockwork/config`.
 
 ## Quick Start (Gin)
 
@@ -137,7 +138,7 @@ Framework adapters use the same flow: call `clockwork.NewRequestCapture(cw, meth
 | `.../integrations/cache` | Cache wrapper (separate module) |
 | `.../integrations/sql` | SQL observer (separate module) |
 | `.../integrations/zap` | Zap log integration |
-| `.../config` | YAML + env config loader |
+| `.../config` | YAML + env config loader (part of core module) |
 
 See [docs/architecture.md](docs/architecture.md) and [docs/migration.md](docs/migration.md) for details.
 

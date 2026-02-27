@@ -189,7 +189,15 @@ func (c *Collector) SetTrace(traceID, spanID string) {
 }
 
 // AddDatabaseQuery adds a database query event.
+// Model is auto-extracted from the SQL when not provided via AddDatabaseQueryDetailed.
 func (c *Collector) AddDatabaseQuery(query string, duration time.Duration, connection string, slow bool) {
+	c.AddDatabaseQueryDetailed(query, duration, connection, slow, "", "", 0)
+}
+
+// AddDatabaseQueryDetailed adds a database query with explicit model, file, and line info.
+// If model is empty, the table name is extracted from the SQL query.
+// If file is empty, it is captured from the caller's stack.
+func (c *Collector) AddDatabaseQueryDetailed(query string, duration time.Duration, connection string, slow bool, model, file string, line int) {
 	if c == nil {
 		return
 	}
@@ -200,11 +208,21 @@ func (c *Collector) AddDatabaseQuery(query string, duration time.Duration, conne
 		return
 	}
 
+	if model == "" {
+		model = extractTableName(query)
+	}
+	if file == "" {
+		file, line = callerOutsidePackage(4)
+	}
+
 	durationMS := durationMs(duration)
 	dq := DatabaseQuery{
 		Query:      c.truncate(query),
 		Duration:   durationMS,
 		Connection: c.truncate(connection),
+		Model:      c.truncate(model),
+		File:       c.truncate(file),
+		Line:       line,
 		Slow:       slow,
 		Timestamp:  unixTimestamp(),
 	}
@@ -541,6 +559,69 @@ func isVendorPath(path string) bool {
 	}
 	p := strings.ToLower(path)
 	return strings.Contains(p, "/vendor/") || strings.Contains(p, "/pkg/mod/")
+}
+
+// extractTableName parses a SQL query and returns the primary table name.
+func extractTableName(query string) string {
+	q := strings.TrimSpace(query)
+	if q == "" {
+		return ""
+	}
+	tokens := strings.Fields(q)
+	upper := make([]string, len(tokens))
+	for i, t := range tokens {
+		upper[i] = strings.ToUpper(t)
+	}
+
+	for i, tok := range upper {
+		switch tok {
+		case "FROM", "INTO", "UPDATE", "TABLE":
+			if i+1 < len(tokens) {
+				return cleanTableName(tokens[i+1])
+			}
+		case "JOIN":
+			if i+1 < len(tokens) {
+				return cleanTableName(tokens[i+1])
+			}
+		}
+	}
+	return ""
+}
+
+func cleanTableName(raw string) string {
+	name := strings.Trim(raw, "`\"'[]")
+	name = strings.TrimRight(name, ",;()")
+	if dot := strings.LastIndex(name, "."); dot >= 0 && dot < len(name)-1 {
+		name = name[dot+1:]
+	}
+	return name
+}
+
+// callerOutsidePackage walks the call stack starting at skip and returns the
+// first frame whose file path does not contain "go-clockwork".
+func callerOutsidePackage(skip int) (string, int) {
+	pcs := make([]uintptr, 16)
+	n := runtime.Callers(skip, pcs)
+	if n == 0 {
+		return "", 0
+	}
+	frames := runtime.CallersFrames(pcs[:n])
+	for {
+		frame, more := frames.Next()
+		if frame.File == "" {
+			if !more {
+				break
+			}
+			continue
+		}
+		if !strings.Contains(frame.File, "go-clockwork") {
+			return frame.File, frame.Line
+		}
+		if !more {
+			break
+		}
+	}
+	return "", 0
 }
 
 // contextKey is an unexported key type to prevent collisions.

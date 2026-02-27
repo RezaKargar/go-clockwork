@@ -13,3 +13,9 @@ type Storage interface {
 	List(ctx context.Context, limit int) ([]*Metadata, error)
 	Cleanup(ctx context.Context, maxAge time.Duration) error
 }
+
+// NewStorage creates a Storage from Config using the built-in in-memory backend.
+func NewStorage(cfg Config) (Storage, error) {
+	cfg.Normalize()
+	return NewInMemoryStorage(cfg.MaxRequests, cfg.MaxStorageBytes), nil
+}

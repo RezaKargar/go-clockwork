@@ -42,6 +42,9 @@ type DatabaseQuery struct {
 	Query      string  `json:"query"`
 	Duration   float64 `json:"duration"`
 	Connection string  `json:"connection"`
+	Model      string  `json:"model,omitempty"`
+	File       string  `json:"file,omitempty"`
+	Line       int     `json:"line,omitempty"`
 	Slow       bool    `json:"slow"`
 	Timestamp  float64 `json:"timestamp"`
 }

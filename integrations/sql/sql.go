@@ -13,6 +13,9 @@ type Observation struct {
 	Query      string
 	Duration   time.Duration
 	Connection string
+	Model      string // table or model name; auto-extracted from SQL if empty
+	File       string // caller file path
+	Line       int    // caller line number
 }
 
 // Observer forwards SQL observations to Clockwork collectors.
@@ -53,5 +56,8 @@ func (o *Observer) OnQuery(ctx context.Context, observation Observation) {
 	}
 
 	slow := observation.Duration > o.slowQueryThreshold
-	collector.AddDatabaseQuery(query, observation.Duration, conn, slow)
+	collector.AddDatabaseQueryDetailed(
+		query, observation.Duration, conn, slow,
+		observation.Model, observation.File, observation.Line,
+	)
 }

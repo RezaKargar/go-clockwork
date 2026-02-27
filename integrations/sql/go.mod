@@ -1,11 +1,8 @@
-module github.com/RezaKargar/go-clockwork/middleware/chi
+module github.com/RezaKargar/go-clockwork/integrations/sql
 
 go 1.26
 
-require (
-	github.com/RezaKargar/go-clockwork v0.2.0
-	github.com/go-chi/chi/v5 v5.2.5
-)
+require github.com/RezaKargar/go-clockwork v0.2.0
 
 require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect

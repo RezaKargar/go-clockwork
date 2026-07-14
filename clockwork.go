@@ -18,6 +18,19 @@ type Clockwork struct {
 
 	activeByTrace sync.Map // map[traceID]*Collector
 	activeCount   atomic.Int64
+
+	goroutineMu   sync.Mutex
+	goroutineRegs map[uint64]*goroutineReg
+}
+
+// goroutineReg reference-counts a goroutine's registration so nested spans
+// running on the same goroutine (e.g. a worker goroutine that starts a
+// top-level span and then a child DB/cache span within it) don't have an
+// inner span's OnEnd tear down the association while an outer span on that
+// same goroutine is still in flight.
+type goroutineReg struct {
+	collector *Collector
+	depth     int
 }
 
 // NewClockwork creates a new Clockwork service.
@@ -120,6 +133,7 @@ func (c *Clockwork) CompleteRequest(ctx context.Context, collector *Collector, s
 
 	collector.SetResponseData(status, duration)
 
+	// TODO: Why we have lock here?!
 	c.dataSourcesMu.RLock()
 	sources := c.dataSources
 	c.dataSourcesMu.RUnlock()
@@ -160,6 +174,63 @@ func (c *Clockwork) unregisterTrace(traceID string) {
 	}
 }
 
+// RegisterGoroutine associates the calling goroutine with the active request
+// collector, so context-free call sites (e.g. a wrapped zapcore.Core, which
+// never sees a context.Context) can still be correlated with the right
+// collector. Callers must pair every call with a matching UnregisterGoroutine
+// for the same goroutine ID; calls nest correctly (a goroutine that's already
+// registered just bumps a ref count), so it's safe to call this from every
+// span's OnStart on top of the top-level per-request registration.
+func (c *Clockwork) RegisterGoroutine(goroutineID uint64, collector *Collector) {
+	if c == nil || collector == nil {
+		return
+	}
+	c.goroutineMu.Lock()
+	defer c.goroutineMu.Unlock()
+	if c.goroutineRegs == nil {
+		c.goroutineRegs = make(map[uint64]*goroutineReg)
+	}
+	if reg, ok := c.goroutineRegs[goroutineID]; ok {
+		reg.depth++
+		return
+	}
+	c.goroutineRegs[goroutineID] = &goroutineReg{collector: collector, depth: 1}
+}
+
+// UnregisterGoroutine removes one nested registration set by RegisterGoroutine
+// for the given goroutine ID, only clearing the association once the
+// outermost registration is unregistered.
+func (c *Clockwork) UnregisterGoroutine(goroutineID uint64) {
+	if c == nil {
+		return
+	}
+	c.goroutineMu.Lock()
+	defer c.goroutineMu.Unlock()
+	reg, ok := c.goroutineRegs[goroutineID]
+	if !ok {
+		return
+	}
+	reg.depth--
+	if reg.depth <= 0 {
+		delete(c.goroutineRegs, goroutineID)
+	}
+}
+
+// CollectorForGoroutine returns the collector associated with the given
+// goroutine ID via RegisterGoroutine, or nil if none is active.
+func (c *Clockwork) CollectorForGoroutine(goroutineID uint64) *Collector {
+	if c == nil {
+		return nil
+	}
+	c.goroutineMu.Lock()
+	defer c.goroutineMu.Unlock()
+	reg, ok := c.goroutineRegs[goroutineID]
+	if !ok {
+		return nil
+	}
+	return reg.collector
+}
+
 // HasActiveTraces reports whether any request currently has active Clockwork capture.
 func (c *Clockwork) HasActiveTraces() bool {
 	if c == nil {
@@ -187,6 +258,21 @@ func (c *Clockwork) RecordLogForTraceWithTrace(traceID, level, message string, f
 		return
 	}
 	collector.AddLogEntryWithTrace(level, message, fields, trace)
+}
+
+// RecordLogForGoroutine appends a log entry for the collector registered
+// against goroutineID via RegisterGoroutine. This is the primary fallback for
+// log lines that don't carry a trace_id field: unlike RecordLogForSingleActive,
+// it stays correct with any number of concurrently active traced requests, as
+// long as the log call happens on the same goroutine that is running the
+// traced request handler.
+func (c *Clockwork) RecordLogForGoroutine(goroutineID uint64, level, message string, fields map[string]interface{}, trace []LogTraceFrame) bool {
+	collector := c.CollectorForGoroutine(goroutineID)
+	if collector == nil {
+		return false
+	}
+	collector.AddLogEntryWithTrace(level, message, fields, trace)
+	return true
 }
 
 // RecordLogForSingleActive appends a log entry when exactly one traced request is active.

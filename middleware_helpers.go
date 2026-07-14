@@ -9,6 +9,7 @@ import (
 )
 
 // ShouldSkipPath returns true if the request path should not be profiled (e.g. favicon, __clockwork routes).
+//TODO: Add support to register skip paths dynamically via config!
 func ShouldSkipPath(path string) bool {
 	path = strings.TrimSpace(strings.TrimSuffix(path, "/"))
 	if path == "" {
@@ -55,6 +56,7 @@ func BuildRequestURL(req *http.Request) string {
 }
 
 // ExtractSafeHeaders returns a safe subset of headers to avoid sensitive values.
+// TODO: Add support to register extra safe headers dynamically via config!
 func ExtractSafeHeaders(headers http.Header) map[string]string {
 	safeHeaders := make(map[string]string)
 	safeHeaderNames := map[string]bool{

@@ -62,6 +62,13 @@ func Middleware(cw *clockwork.Clockwork) echo.MiddlewareFunc {
 	}
 }
 
+// Setup registers the Clockwork profiling middleware and the /__clockwork API
+// routes on the given Echo instance in a single call.
+func Setup(e *echo.Echo, cw *clockwork.Clockwork) {
+	e.Use(Middleware(cw))
+	RegisterRoutes(e, cw)
+}
+
 // RegisterRoutes registers GET /__clockwork/:id on the Echo instance.
 func RegisterRoutes(e *echo.Echo, cw *clockwork.Clockwork) {
 	if e == nil || cw == nil || !cw.IsEnabled() {

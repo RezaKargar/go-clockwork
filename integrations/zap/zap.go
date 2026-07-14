@@ -75,12 +75,22 @@ func (c *Core) Write(entry zapcore.Entry, fields []zapcore.Field) error {
 
 	traceFrames := buildLogTrace(entry)
 
-	if traceID == "" {
-		c.cw.RecordLogForSingleActiveWithTrace(entry.Level.String(), entry.Message, contextFields, traceFrames)
+	if traceID != "" {
+		c.cw.RecordLogForTraceWithTrace(traceID, entry.Level.String(), entry.Message, contextFields, traceFrames)
 		return err
 	}
 
-	c.cw.RecordLogForTraceWithTrace(traceID, entry.Level.String(), entry.Message, contextFields, traceFrames)
+	// No trace_id field on this log line (the common case for most call
+	// sites, which just use the plain injected *zap.Logger). Correlate via
+	// the calling goroutine instead of falling straight to the single-active
+	// heuristic below - that heuristic silently and non-deterministically
+	// drops logs whenever more than one traced request is active at once,
+	// which is common even in local dev (multiple tabs, prefetch, etc.).
+	if c.cw.RecordLogForGoroutine(clockwork.CurrentGoroutineID(), entry.Level.String(), entry.Message, contextFields, traceFrames) {
+		return err
+	}
+
+	c.cw.RecordLogForSingleActiveWithTrace(entry.Level.String(), entry.Message, contextFields, traceFrames)
 	return err
 }
 

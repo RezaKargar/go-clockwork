@@ -25,7 +25,13 @@ type Metadata struct {
 	DatabaseDuration     float64         `json:"databaseDuration"`
 
 	CacheQueries []CacheQuery `json:"cacheQueries"`
-	LogEntries   []LogEntry   `json:"log"`
+
+	// HTTPRequests holds outbound HTTP calls this request made to other
+	// services (i.e. routes called externally), shown in the viewer's
+	// "HTTP Requests" tab.
+	HTTPRequests []HTTPRequest `json:"httpRequests"`
+
+	LogEntries []LogEntry `json:"log"`
 
 	TimelineEvents []TimelineEvent `json:"timelineData"`
 
@@ -38,6 +44,10 @@ type Metadata struct {
 }
 
 // DatabaseQuery represents a database query in Clockwork payload.
+//
+// Time is when the query started, as Unix seconds (matching Metadata.Time's
+// epoch-seconds convention) - the Clockwork viewer positions this event on
+// the timeline as [Time, Time+Duration/1000]. Duration is in milliseconds.
 type DatabaseQuery struct {
 	Query      string  `json:"query"`
 	Duration   float64 `json:"duration"`
@@ -46,15 +56,40 @@ type DatabaseQuery struct {
 	File       string  `json:"file,omitempty"`
 	Line       int     `json:"line,omitempty"`
 	Slow       bool    `json:"slow"`
-	Timestamp  float64 `json:"timestamp"`
+	Time       float64 `json:"time"`
 }
 
 // CacheQuery represents a cache operation in Clockwork payload.
+//
+// Time is when the operation started, as Unix seconds; see DatabaseQuery.Time.
 type CacheQuery struct {
-	Type      string  `json:"type"`
-	Key       string  `json:"key"`
-	Duration  float64 `json:"duration"`
-	Timestamp float64 `json:"timestamp"`
+	Type     string  `json:"type"`
+	Key      string  `json:"key"`
+	Duration float64 `json:"duration"`
+	Time     float64 `json:"time"`
+}
+
+// HTTPRequest represents an outbound HTTP call in Clockwork payload.
+//
+// Time is when the call started, as Unix seconds; see DatabaseQuery.Time.
+// Request.URL is the full raw URL string - the viewer parses it into
+// scheme/host/path/query client-side, so it must not be pre-split here.
+type HTTPRequest struct {
+	Time     float64           `json:"time"`
+	Duration float64           `json:"duration"`
+	Request  HTTPRequestInfo   `json:"request"`
+	Response *HTTPResponseInfo `json:"response,omitempty"`
+}
+
+// HTTPRequestInfo describes the outbound request in an HTTPRequest entry.
+type HTTPRequestInfo struct {
+	Method string `json:"method"`
+	URL    string `json:"url"`
+}
+
+// HTTPResponseInfo describes the response in an HTTPRequest entry, when known.
+type HTTPResponseInfo struct {
+	Status int `json:"status"`
 }
 
 // LogEntry represents a log message in Clockwork payload.

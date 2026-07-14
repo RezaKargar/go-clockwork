@@ -55,6 +55,14 @@ func Middleware(cw *clockwork.Clockwork, logger clockwork.Logger) gin.HandlerFun
 		c.Header(cw.Config().IDHeader, collector.ID())
 		c.Header("X-Clockwork-Version", clockwork.ProtocolVersion)
 
+		// Correlates context-free call sites (e.g. a wrapped zapcore.Core,
+		// which never sees a context.Context) with this collector, as long
+		// as they run on the same goroutine as the handler - which gin
+		// guarantees since c.Next() runs it synchronously.
+		goroutineID := clockwork.CurrentGoroutineID()
+		cw.RegisterGoroutine(goroutineID, collector)
+		defer cw.UnregisterGoroutine(goroutineID)
+
 		start := time.Now()
 		c.Next()
 
@@ -70,6 +78,14 @@ func Middleware(cw *clockwork.Clockwork, logger clockwork.Logger) gin.HandlerFun
 			logger.Warn("failed to persist clockwork metadata", "id", collector.ID(), "error", err)
 		}
 	}
+}
+
+// Setup registers the Clockwork profiling middleware and the /__clockwork API
+// routes on the given engine in a single call. Optional routeMiddlewares are
+// applied to the /__clockwork route group (e.g. an auth-bypass middleware).
+func Setup(engine *gin.Engine, cw *clockwork.Clockwork, logger clockwork.Logger, routeMiddlewares ...gin.HandlerFunc) {
+	engine.Use(Middleware(cw, logger))
+	RegisterRoutes(engine, cw, logger, routeMiddlewares...)
 }
 
 // RegisterRoutes registers Clockwork API routes under /__clockwork.

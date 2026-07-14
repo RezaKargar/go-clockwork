@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -21,6 +22,7 @@ type collectorLimits struct {
 	maxStringLen     int
 	maxDBQueries     int
 	maxCacheQueries  int
+	maxHTTPRequests  int
 	maxLogs          int
 	maxTimelineEvent int
 }
@@ -31,6 +33,7 @@ func limitsFromConfig(cfg Config) collectorLimits {
 		maxStringLen:     cfg.MaxStringLength,
 		maxDBQueries:     cfg.MaxDatabaseQueries,
 		maxCacheQueries:  cfg.MaxCacheQueries,
+		maxHTTPRequests:  cfg.MaxHTTPRequests,
 		maxLogs:          cfg.MaxLogEntries,
 		maxTimelineEvent: cfg.MaxTimelineEvents,
 	}
@@ -53,6 +56,7 @@ type DataCollector interface {
 	SetResponseData(status int, duration time.Duration)
 	AddDatabaseQuery(query string, duration time.Duration, connection string, slow bool)
 	AddCacheQuery(cacheType, key string, duration time.Duration)
+	AddHTTPRequest(method, url string, statusCode int, duration time.Duration)
 	AddLogEntry(level, message string, fields map[string]interface{})
 	AddLogEntryWithTrace(level, message string, fields map[string]interface{}, trace []LogTraceFrame)
 	AddTimelineEvent(name, description string, start, end time.Time, color string)
@@ -79,6 +83,7 @@ type Collector struct {
 
 	databaseQueries []DatabaseQuery
 	cacheQueries    []CacheQuery
+	httpRequests    []HTTPRequest
 	logEntries      []LogEntry
 	timelineEvents  []TimelineEvent
 	userData        map[string]interface{}
@@ -108,6 +113,7 @@ func NewCollector(method, uri string, limits collectorLimits) *Collector {
 		headers:          make(map[string]string),
 		databaseQueries:  make([]DatabaseQuery, 0, 8),
 		cacheQueries:     make([]CacheQuery, 0, 16),
+		httpRequests:     make([]HTTPRequest, 0, 8),
 		logEntries:       make([]LogEntry, 0, 16),
 		timelineEvents:   make([]TimelineEvent, 0, 16),
 		dropped:          make(map[string]int),
@@ -215,19 +221,23 @@ func (c *Collector) AddDatabaseQueryDetailed(query string, duration time.Duratio
 		file, line = callerOutsidePackage(4)
 	}
 
-	durationMS := durationMs(duration)
+	// The query has already finished by the time this is called (the caller
+	// measured duration around it), so recover the start time by walking
+	// duration back from now rather than stamping "now" as the query's time -
+	// the Clockwork viewer positions the event as [Time, Time+Duration/1000].
+	startTime := unixTimestamp() - duration.Seconds()
 	dq := DatabaseQuery{
 		Query:      c.truncate(query),
-		Duration:   durationMS,
+		Duration:   durationMs(duration),
 		Connection: c.truncate(connection),
 		Model:      c.truncate(model),
 		File:       c.truncate(file),
 		Line:       line,
 		Slow:       slow,
-		Timestamp:  unixTimestamp(),
+		Time:       startTime,
 	}
 	c.databaseQueries = append(c.databaseQueries, dq)
-	c.appendTimelineLocked("db", dq.Query, dq.Timestamp-durationMS, dq.Timestamp, colorForSlow(slow))
+	c.appendTimelineLocked("db", dq.Query, startTime, startTime+duration.Seconds(), colorForSlow(slow))
 }
 
 // AddCacheQuery adds a cache operation event.
@@ -242,15 +252,46 @@ func (c *Collector) AddCacheQuery(cacheType, key string, duration time.Duration)
 		return
 	}
 
-	durationMS := durationMs(duration)
+	startTime := unixTimestamp() - duration.Seconds()
 	cq := CacheQuery{
-		Type:      c.truncate(cacheType),
-		Key:       c.truncate(key),
-		Duration:  durationMS,
-		Timestamp: unixTimestamp(),
+		Type:     c.truncate(cacheType),
+		Key:      c.truncate(key),
+		Duration: durationMs(duration),
+		Time:     startTime,
 	}
 	c.cacheQueries = append(c.cacheQueries, cq)
-	c.appendTimelineLocked("cache", cq.Type+": "+cq.Key, cq.Timestamp-durationMS, cq.Timestamp, "purple")
+	c.appendTimelineLocked("cache", cq.Type+": "+cq.Key, startTime, startTime+duration.Seconds(), "purple")
+}
+
+// AddHTTPRequest adds an outbound HTTP call made to another service (a route
+// called externally), shown in the viewer's "HTTP Requests" tab. Pass
+// statusCode as 0 when the response status isn't known (e.g. the request
+// errored before a response was received).
+func (c *Collector) AddHTTPRequest(method, url string, statusCode int, duration time.Duration) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if !c.reserveLocked("httpRequests", c.limits.maxHTTPRequests, len(c.httpRequests), len(url)+64) {
+		return
+	}
+
+	startTime := unixTimestamp() - duration.Seconds()
+	hr := HTTPRequest{
+		Time:     startTime,
+		Duration: durationMs(duration),
+		Request: HTTPRequestInfo{
+			Method: c.truncate(method),
+			URL:    c.truncate(url),
+		},
+	}
+	if statusCode > 0 {
+		hr.Response = &HTTPResponseInfo{Status: statusCode}
+	}
+	c.httpRequests = append(c.httpRequests, hr)
+	c.appendTimelineLocked("http", method+" "+url, startTime, startTime+duration.Seconds(), "purple")
 }
 
 // AddLogEntry adds a log message.
@@ -335,12 +376,23 @@ func (c *Collector) GetMetadata() *Metadata {
 	}
 
 	meta := &Metadata{
-		ID:                   c.id,
-		Version:              1,
-		Type:                 "request",
-		Time:                 unixFromTime(c.startTime),
-		ResponseTime:         unixFromTime(c.responseTime),
-		ResponseStatus:       c.responseStatus,
+		ID:             c.id,
+		Version:        1,
+		Type:           "request",
+		Time:           unixFromTime(c.startTime),
+		ResponseTime:   unixFromTime(c.responseTime),
+		ResponseStatus: c.responseStatus,
+		// Milliseconds, matching every per-event Duration field (db/cache/
+		// timeline). The viewer builds its timeline window as [Time,
+		// Time+ResponseDuration] and only ever uses that window via
+		// (endTime-startTime) - since Time's epoch-seconds offset cancels out
+		// in the subtraction, that difference numerically equals whatever
+		// raw value ResponseDuration carries. Individual event durations are
+		// compared against that same difference (durationRelative =
+		// duration/(endTime-startTime)), so ResponseDuration must be in the
+		// same unit (ms) as those, not seconds - the viewer's startRelative
+		// calculation separately multiplies the (real, seconds-based) elapsed
+		// time by 1000 to reconcile against this ms-scale window.
 		ResponseDuration:     durationMs(c.responseDuration),
 		Method:               c.method,
 		URI:                  c.uri,
@@ -353,6 +405,7 @@ func (c *Collector) GetMetadata() *Metadata {
 		DatabaseQueriesCount: len(c.databaseQueries),
 		DatabaseDuration:     totalDBDuration,
 		CacheQueries:         copyCache(c.cacheQueries),
+		HTTPRequests:         copyHTTPRequests(c.httpRequests),
 		LogEntries:           copyLogs(c.logEntries),
 		TimelineEvents:       copyTimeline(c.timelineEvents),
 		MemoryUsage:          memoryDelta,
@@ -398,7 +451,11 @@ func (c *Collector) reserveLocked(bucket string, max, current, estimate int) boo
 	return true
 }
 
-func (c *Collector) appendTimelineLocked(name, description string, startMs, endMs float64, color string) {
+// appendTimelineLocked records a timeline event. start and end are Unix
+// seconds (matching Metadata.Time's epoch-seconds convention); the stored
+// Duration is converted to milliseconds, since that's what the Clockwork
+// viewer expects (it computes end = start + duration/1000 client-side).
+func (c *Collector) appendTimelineLocked(name, description string, start, end float64, color string) {
 	if c.limits.maxTimelineEvent > 0 && len(c.timelineEvents) >= c.limits.maxTimelineEvent {
 		c.dropped["timeline"]++
 		c.truncated = true
@@ -408,13 +465,13 @@ func (c *Collector) appendTimelineLocked(name, description string, startMs, endM
 	event := TimelineEvent{
 		Name:        c.truncate(name),
 		Description: c.truncate(description),
-		Start:       startMs,
+		Start:       start,
 		Color:       color,
 	}
 
-	if endMs > startMs {
-		event.End = endMs
-		event.Duration = endMs - startMs
+	if end > start {
+		event.End = end
+		event.Duration = (end - start) * 1000
 	}
 
 	c.timelineEvents = append(c.timelineEvents, event)
@@ -506,6 +563,7 @@ func (c *Collector) truncate(v string) string {
 	return v[:c.limits.maxStringLen]
 }
 
+// TODO: Can not change these copy functions to be generic?!
 func copyDB(in []DatabaseQuery) []DatabaseQuery {
 	out := make([]DatabaseQuery, len(in))
 	copy(out, in)
@@ -518,15 +576,32 @@ func copyCache(in []CacheQuery) []CacheQuery {
 	return out
 }
 
+func copyHTTPRequests(in []HTTPRequest) []HTTPRequest {
+	out := make([]HTTPRequest, len(in))
+	copy(out, in)
+	return out
+}
+
 func copyLogs(in []LogEntry) []LogEntry {
 	out := make([]LogEntry, len(in))
 	copy(out, in)
 	return out
 }
 
+// copyTimeline returns a copy of in sorted by Start time.
+//
+// Events are appended to the collector in the order their spans *end*
+// (OnEnd fires as each span completes), not the order they *started* -
+// a short child span that starts after a long-running sibling can finish
+// first and would otherwise appear earlier in the list despite starting
+// later. Sorting here, at read time, keeps the hot append path lock-cheap
+// while presenting the timeline in the chronological order it happened.
 func copyTimeline(in []TimelineEvent) []TimelineEvent {
 	out := make([]TimelineEvent, len(in))
 	copy(out, in)
+	sort.SliceStable(out, func(i, j int) bool {
+		return out[i].Start < out[j].Start
+	})
 	return out
 }
 
@@ -638,4 +713,17 @@ func CollectorFromContext(ctx context.Context) *Collector {
 // ContextWithCollector stores collector in context.
 func ContextWithCollector(ctx context.Context, collector *Collector) context.Context {
 	return context.WithValue(ctx, collectorContextKey, collector)
+}
+
+// ContextWithoutCollector returns a context with any Clockwork collector
+// association removed, shadowing whatever was set by ContextWithCollector on
+// an ancestor context. Use this before spawning background work that
+// outlives the request handler (e.g. stale-while-revalidate cache refreshes,
+// A/B-test shadow traffic): Clockwork takes a single snapshot of the
+// collector when the handler returns and persists it immediately, so any
+// spans/queries attributed to the collector afterward are silently lost
+// anyway - detaching explicitly avoids that dead-end capture and keeps the
+// request's profile scoped to work the response actually waited on.
+func ContextWithoutCollector(ctx context.Context) context.Context {
+	return context.WithValue(ctx, collectorContextKey, (*Collector)(nil))
 }

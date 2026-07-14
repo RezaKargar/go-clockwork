@@ -57,6 +57,13 @@ func Middleware(cw *clockwork.Clockwork) fiber.Handler {
 	}
 }
 
+// Setup registers the Clockwork profiling middleware and the /__clockwork API
+// routes on the given Fiber app in a single call.
+func Setup(app *fiber.App, cw *clockwork.Clockwork) {
+	app.Use(Middleware(cw))
+	RegisterRoutes(app, cw)
+}
+
 // RegisterRoutes registers GET /__clockwork/:id on the Fiber app.
 func RegisterRoutes(app *fiber.App, cw *clockwork.Clockwork) {
 	if app == nil || cw == nil || !cw.IsEnabled() {

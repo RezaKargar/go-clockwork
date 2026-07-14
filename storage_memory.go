@@ -161,6 +161,7 @@ func (s *InMemoryStorage) removeElementLocked(elem *list.Element) {
 	s.entries.Remove(elem)
 }
 
+// TODO: Function 'min' collides with the 'builtin' function
 func min(a, b int) int {
 	if a < b {
 		return a

@@ -64,6 +64,13 @@ func Middleware(cw *clockwork.Clockwork) func(http.Handler) http.Handler {
 	}
 }
 
+// Setup registers the Clockwork profiling middleware and the /__clockwork API
+// routes on the given Chi router in a single call.
+func Setup(r chimw.Router, cw *clockwork.Clockwork) {
+	r.Use(Middleware(cw))
+	RegisterRoutes(r, cw)
+}
+
 // RegisterRoutes registers GET /__clockwork/:id on the Chi router.
 func RegisterRoutes(r chimw.Router, cw *clockwork.Clockwork) {
 	if r == nil || cw == nil || !cw.IsEnabled() {

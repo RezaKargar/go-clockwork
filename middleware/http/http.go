@@ -83,6 +83,15 @@ func MetadataHandler(cw *clockwork.Clockwork) http.Handler {
 	})
 }
 
+// Setup wraps the given handler with the Clockwork profiling middleware and
+// registers the /__clockwork metadata routes on the provided mux in a single
+// call. It returns the wrapped handler for use as the mux's default handler or
+// in an http.Server.
+func Setup(mux *http.ServeMux, cw *clockwork.Clockwork, handler http.Handler) http.Handler {
+	RegisterMetadataRoute(mux, cw)
+	return Middleware(cw, handler)
+}
+
 // RegisterMetadataRoute registers GET /__clockwork/:id on provided mux.
 func RegisterMetadataRoute(mux *http.ServeMux, cw *clockwork.Clockwork) {
 	if mux == nil || cw == nil || !cw.IsEnabled() {

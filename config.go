@@ -16,6 +16,7 @@ type Config struct {
 
 	MaxDatabaseQueries int `mapstructure:"max_database_queries"`
 	MaxCacheQueries    int `mapstructure:"max_cache_queries"`
+	MaxHTTPRequests    int `mapstructure:"max_http_requests"`
 	MaxLogEntries      int `mapstructure:"max_log_entries"`
 	MaxTimelineEvents  int `mapstructure:"max_timeline_events"`
 	MaxStringLength    int `mapstructure:"max_string_length"`
@@ -36,6 +37,7 @@ func DefaultConfig() Config {
 		MaxRequestPayloadBytes: 256 * 1024,
 		MaxDatabaseQueries:     100,
 		MaxCacheQueries:        200,
+		MaxHTTPRequests:        100,
 		MaxLogEntries:          150,
 		MaxTimelineEvents:      200,
 		MaxStringLength:        2048,
@@ -72,6 +74,9 @@ func (c *Config) Normalize() {
 	}
 	if c.MaxCacheQueries <= 0 {
 		c.MaxCacheQueries = d.MaxCacheQueries
+	}
+	if c.MaxHTTPRequests <= 0 {
+		c.MaxHTTPRequests = d.MaxHTTPRequests
 	}
 	if c.MaxLogEntries <= 0 {
 		c.MaxLogEntries = d.MaxLogEntries

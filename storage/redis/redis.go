@@ -96,6 +96,7 @@ func (s *Storage) Store(ctx context.Context, metadata *clockwork.Metadata) error
 func (s *Storage) Get(ctx context.Context, id string) (*clockwork.Metadata, error) {
 	value, err := s.client.Get(ctx, s.reqKey(id)).Bytes()
 	if err != nil {
+		//TODO: Comparison with errors using equality operators fails on wrapped errors
 		if err == redis.Nil {
 			return nil, fmt.Errorf("clockwork metadata not found: %s", id)
 		}

@@ -54,6 +54,7 @@ func Middleware(cw *clockwork.Clockwork, logger clockwork.Logger) gin.HandlerFun
 
 		c.Header(cw.Config().IDHeader, collector.ID())
 		c.Header("X-Clockwork-Version", clockwork.ProtocolVersion)
+		c.Header("X-Clockwork-Path", clockwork.MetadataPathHeader(cw.Config()))
 
 		// Correlates context-free call sites (e.g. a wrapped zapcore.Core,
 		// which never sees a context.Context) with this collector, as long

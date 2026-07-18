@@ -43,6 +43,7 @@ func Middleware(cw *clockwork.Clockwork, next http.Handler) http.Handler {
 		rw := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
 		rw.Header().Set(cw.Config().IDHeader, collector.ID())
 		rw.Header().Set("X-Clockwork-Version", clockwork.ProtocolVersion)
+		rw.Header().Set("X-Clockwork-Path", clockwork.MetadataPathHeader(cw.Config()))
 
 		started := time.Now()
 		next.ServeHTTP(rw, r)

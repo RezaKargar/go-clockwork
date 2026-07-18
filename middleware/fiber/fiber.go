@@ -39,6 +39,7 @@ func Middleware(cw *clockwork.Clockwork) fiber.Handler {
 		c.SetUserContext(clockwork.ContextWithCollector(c.UserContext(), collector))
 		c.Set(cw.Config().IDHeader, collector.ID())
 		c.Set("X-Clockwork-Version", clockwork.ProtocolVersion)
+		c.Set("X-Clockwork-Path", clockwork.MetadataPathHeader(cw.Config()))
 
 		started := time.Now()
 		err := c.Next()

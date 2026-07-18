@@ -10,6 +10,15 @@ type Config struct {
 	HeaderName string `mapstructure:"header_name"`
 	IDHeader   string `mapstructure:"id_header_name"`
 
+	// PathPrefix is the external path prefix under which /__clockwork is
+	// reachable by clients, when it differs from what this service sees
+	// internally (e.g. an API gateway routes "/discovery/*" here and strips
+	// the "/discovery" prefix before forwarding). Sent to browser extensions
+	// via the X-Clockwork-Path response header so they can locate the
+	// metadata endpoint regardless of the original request's path depth.
+	// Leave empty when /__clockwork is reachable at the service root.
+	PathPrefix string `mapstructure:"path_prefix"`
+
 	MaxRequests            int   `mapstructure:"max_requests"`
 	MaxStorageBytes        int64 `mapstructure:"max_storage_bytes"`
 	MaxRequestPayloadBytes int   `mapstructure:"max_request_payload_bytes"`

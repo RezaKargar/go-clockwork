@@ -55,6 +55,16 @@ func BuildRequestURL(req *http.Request) string {
 	return scheme + "://" + host + req.URL.RequestURI()
 }
 
+// MetadataPathHeader returns the value to send in the X-Clockwork-Path
+// response header, telling browser extensions where the /__clockwork
+// metadata endpoint is reachable. This is required whenever the service sits
+// behind a gateway that mounts it under an external prefix (see
+// Config.PathPrefix) - without it, extensions derive the metadata path from
+// the request URL itself, which breaks for shallow paths.
+func MetadataPathHeader(cfg Config) string {
+	return strings.TrimSuffix(cfg.PathPrefix, "/") + "/__clockwork/"
+}
+
 // ExtractSafeHeaders returns a safe subset of headers to avoid sensitive values.
 // TODO: Add support to register extra safe headers dynamically via config!
 func ExtractSafeHeaders(headers http.Header) map[string]string {

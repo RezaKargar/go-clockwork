@@ -188,6 +188,46 @@ func TestMiddleware_StoresTimelineDataWithResponseDuration(t *testing.T) {
 	require.NotEmpty(t, traceFrames)
 }
 
+func TestMiddleware_SetsClockworkPathHeader(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	cfg := clockwork.Config{Enabled: true, HeaderName: "X-Clockwork", IDHeader: "X-Clockwork-Id"}
+	cfg.Normalize()
+	store := clockwork.NewInMemoryStorage(20, 1024*1024)
+	cw := clockwork.NewClockwork(cfg, store)
+
+	router := gin.New()
+	router.Use(Middleware(cw, nil))
+	router.GET("/ok", func(c *gin.Context) { c.Status(http.StatusOK) })
+
+	req := httptest.NewRequest(http.MethodGet, "/ok", nil)
+	req.Header["X-Clockwork"] = []string{""}
+	res := httptest.NewRecorder()
+	router.ServeHTTP(res, req)
+
+	require.Equal(t, "/__clockwork/", res.Header().Get("X-Clockwork-Path"))
+}
+
+func TestMiddleware_SetsClockworkPathHeaderWithPrefix(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	cfg := clockwork.Config{Enabled: true, HeaderName: "X-Clockwork", IDHeader: "X-Clockwork-Id", PathPrefix: "/discovery"}
+	cfg.Normalize()
+	store := clockwork.NewInMemoryStorage(20, 1024*1024)
+	cw := clockwork.NewClockwork(cfg, store)
+
+	router := gin.New()
+	router.Use(Middleware(cw, nil))
+	router.GET("/ok", func(c *gin.Context) { c.Status(http.StatusOK) })
+
+	req := httptest.NewRequest(http.MethodGet, "/ok", nil)
+	req.Header["X-Clockwork"] = []string{""}
+	res := httptest.NewRecorder()
+	router.ServeHTTP(res, req)
+
+	require.Equal(t, "/discovery/__clockwork/", res.Header().Get("X-Clockwork-Path"))
+}
+
 func TestClockworkRoute_HeaderIDStrictOverride(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

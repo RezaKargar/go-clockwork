@@ -43,6 +43,7 @@ func Middleware(cw *clockwork.Clockwork) echo.MiddlewareFunc {
 			c.SetRequest(req.WithContext(clockwork.ContextWithCollector(req.Context(), collector)))
 			c.Response().Header().Set(cw.Config().IDHeader, collector.ID())
 			c.Response().Header().Set("X-Clockwork-Version", clockwork.ProtocolVersion)
+			c.Response().Header().Set("X-Clockwork-Path", clockwork.MetadataPathHeader(cw.Config()))
 
 			started := time.Now()
 			err := next(c)

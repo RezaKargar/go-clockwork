@@ -30,11 +30,28 @@ type Storage struct {
 	ttl        time.Duration
 }
 
-// New creates Redis-backed storage for Clockwork.
+// New creates Redis-backed storage for Clockwork, opening a dedicated client.
 func New(cfg Config) (clockwork.Storage, error) {
 	endpoint := strings.TrimSpace(cfg.Endpoint)
 	if endpoint == "" {
 		return nil, fmt.Errorf("redis endpoint is required")
+	}
+
+	client := redis.NewClient(&redis.Options{
+		Addr:     endpoint,
+		Password: cfg.Password,
+		DB:       cfg.DB,
+	})
+
+	return NewWithClient(client, cfg)
+}
+
+// NewWithClient creates Redis-backed storage for Clockwork using an existing
+// client, so callers that already maintain a Redis connection pool (e.g. for
+// application caching) can share it instead of opening a second one.
+func NewWithClient(client *redis.Client, cfg Config) (clockwork.Storage, error) {
+	if client == nil {
+		return nil, fmt.Errorf("redis client is required")
 	}
 
 	ttl := cfg.TTL
@@ -46,12 +63,6 @@ func New(cfg Config) (clockwork.Storage, error) {
 	if prefix == "" {
 		prefix = "clockwork"
 	}
-
-	client := redis.NewClient(&redis.Options{
-		Addr:     endpoint,
-		Password: cfg.Password,
-		DB:       cfg.DB,
-	})
 
 	return &Storage{
 		client:     client,
